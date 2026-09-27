@@ -27,7 +27,7 @@ def vk_call(method: str, token: str, **params):
     req = urllib.request.Request(
         f"{VK_API_BASE}/{method}",
         data=data,
-        headers={"User-Agent": "geotrips-vk-autopost/1.4"},
+        headers={"User-Agent": "geotrips-vk-autopost/1.5"},
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=45) as response:
@@ -76,7 +76,7 @@ def multipart_upload(url: str, field_name: str, filename: str, content_type: str
         headers={
             "Content-Type": f"multipart/form-data; boundary={boundary}",
             "Content-Length": str(len(body)),
-            "User-Agent": "geotrips-vk-autopost/1.4",
+            "User-Agent": "geotrips-vk-autopost/1.5",
         },
         method="POST",
     )
@@ -173,16 +173,21 @@ def main():
 
     attachments = []
     image_url = str(post.get("image_url", "")).strip()
+    preview_url = str(post.get("preview_url", "")).strip()
 
-    if image_url:
-        if not user_token:
-            fail(
-                "This post has a Tripster image, but VK_USER_TOKEN is missing. "
-                "VK community tokens cannot upload native wall photos; refusing to publish an ugly document fallback."
-            )
+    if image_url and user_token:
         print("Uploading native Tripster photo to VK with user token...")
         attachments.append(upload_wall_photo(user_token, group_id, image_url))
         post["photo_mode"] = "native_photo"
+    elif preview_url:
+        print("Attaching GeoTrips Open Graph preview page...")
+        attachments.append(preview_url)
+        post["photo_mode"] = "og_link_preview"
+    elif image_url:
+        fail(
+            "This post has a Tripster image, but neither VK_USER_TOKEN nor preview_url is available. "
+            "Refusing to publish without a visual."
+        )
 
     for attachment in post.get("attachments", []) or []:
         value = str(attachment).strip()
