@@ -8,92 +8,100 @@
   <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
   <style>
     body{font-family:Arial,sans-serif;background:#f5f5f7;color:#111;margin:0}
-    main{max-width:680px;margin:40px auto;padding:24px}
+    main{max-width:700px;margin:34px auto;padding:20px}
     .card{background:#fff;border-radius:18px;padding:24px;box-shadow:0 8px 30px rgba(0,0,0,.08)}
-    button,a.btn{display:inline-block;border:0;border-radius:10px;padding:13px 18px;font-size:16px;cursor:pointer;background:#2688eb;color:#fff;text-decoration:none}
-    textarea{width:100%;box-sizing:border-box;min-height:84px;padding:12px;border:1px solid #d7d7dc;border-radius:10px;resize:none}
-    .muted{color:#666;font-size:14px;line-height:1.5}.ok{color:#167c38;font-weight:700}.err{color:#b3261e;white-space:pre-wrap}
-    #codeBox{display:none;margin-top:20px;padding-top:16px;border-top:1px solid #eee}
+    button{border:0;border-radius:10px;padding:14px 18px;font-size:16px;cursor:pointer;background:#2688eb;color:#fff;font-weight:700}
+    button:disabled{opacity:.55;cursor:not-allowed}
+    .muted{color:#666;font-size:14px;line-height:1.5}
+    .ok{color:#167c38;font-weight:700}
+    .err{color:#b3261e;white-space:pre-wrap;line-height:1.45}
+    .preview{margin:18px 0;padding:16px;background:#f7f8fa;border-radius:14px}
+    .preview img{width:100%;max-height:320px;object-fit:cover;border-radius:12px;display:block;margin-bottom:12px}
+    .preview p{white-space:pre-line;line-height:1.45;margin:0}
+    a{color:#2688eb}
   </style>
 </head>
 <body>
-<main><div class="card">
-  <h1>GeoTrips VK Helper</h1>
-  <p>Получение одноразового кода для серверной авторизации VK.</p>
-  <p id="vkStatus" class="muted">Инициализация VK…</p>
-  <button id="serverAuthBtn" disabled>Получить серверный код VK</button>
-  <p class="muted">VK откроется в новой вкладке. Разрешите доступ к фотографиям, после чего вы вернётесь на эту страницу.</p>
-  <div id="codeBox">
-    <p class="ok">Код получен ✅</p>
-    <textarea id="code" readonly></textarea>
-    <div style="margin-top:10px"><button id="copyBtn">Скопировать код</button></div>
-    <p class="muted">Этот код одноразовый и быстро истекает. Сохраните его в GitHub Secrets под именем <b>VK_AUTH_CODE</b>. Сам код в чат не присылайте.</p>
-    <a class="btn" href="https://github.com/zurabsamkharadze-png/vk-autopost/settings/secrets/actions" target="_blank" rel="noopener">Открыть GitHub Secrets</a>
+<main>
+  <div class="card">
+    <h1>GeoTrips VK Helper</h1>
+    <p>Тестируем более простой способ: VK сам создаёт пост и загружает фотографию по ссылке через официальное окно публикации.</p>
+    <p id="status" class="muted">Инициализация VK…</p>
+
+    <div class="preview">
+      <img src="https://cdn.tripster.ru/photos/24f5f5d1-c62f-410a-9c57-d66e6114b578.jpg" alt="Кахетия — Tripster">
+      <p>🍷 Кахетия — винная Грузия за один день 🇬🇪
+
+Сигнахи, Бодбе, Телави, Алазанская долина и дегустации — насыщенная поездка из Тбилиси.
+
+👉 Подробнее на Tripster:
+https://experience.tripster.ru/u/fbe94c83e8/</p>
+    </div>
+
+    <button id="testBtn" disabled>Открыть тестовую публикацию в VK</button>
+    <p class="muted">После нажатия VK покажет своё окно публикации. Проверь, что фотография видна, и только потом нажимай публикацию.</p>
+    <div id="result" class="ok" style="margin-top:16px"></div>
+    <div id="error" class="err" style="margin-top:16px"></div>
   </div>
-  <div id="error" class="err" style="margin-top:16px"></div>
-</div></main>
+</main>
 <script>
-const APP_ID=54792536;
-const REDIRECT_URI='https://zurabsamkharadze-png.github.io/vk-autopost/';
-const params=new URLSearchParams(window.location.search);
-const code=params.get('code');
-const returnedState=params.get('state');
-const oauthError=params.get('error');
+const GROUP_ID=241800139;
+const IMAGE_URL='https://cdn.tripster.ru/photos/24f5f5d1-c62f-410a-9c57-d66e6114b578.jpg';
+const TEXT=`🍷 Кахетия — винная Грузия за один день 🇬🇪\n\nСигнахи, монастырь Бодбе, Телави, Алазанская долина и дегустации — насыщенная групповая экскурсия из Тбилиси.\n\n👉 Актуальная цена и свободные даты:\nhttps://experience.tripster.ru/u/fbe94c83e8/`;
+
+const statusEl=document.getElementById('status');
+const testBtn=document.getElementById('testBtn');
+const resultEl=document.getElementById('result');
 const errorEl=document.getElementById('error');
-const codeBox=document.getElementById('codeBox');
-const codeEl=document.getElementById('code');
-const statusEl=document.getElementById('vkStatus');
-const authBtn=document.getElementById('serverAuthBtn');
 
 async function initVK(){
   try{
-    if(window.vkBridge){
-      await vkBridge.send('VKWebAppInit');
-      statusEl.textContent='VK готов.';
-    }else{
-      statusEl.textContent='Страница открыта. VK Bridge не найден, но авторизация доступна.';
-    }
-    authBtn.disabled=false;
+    if(!window.vkBridge) throw new Error('VK Bridge не загрузился');
+    await vkBridge.send('VKWebAppInit');
+    statusEl.textContent='VK готов. Можно открыть тестовую публикацию.';
+    testBtn.disabled=false;
   }catch(e){
-    statusEl.textContent='Страница открыта. Можно продолжить авторизацию.';
-    authBtn.disabled=false;
+    statusEl.textContent='Открой эту страницу именно через ссылку приложения VK.';
+    errorEl.textContent=String(e && (e.error_data?.error_reason || e.message || e));
   }
 }
 
-if(oauthError){
-  errorEl.textContent='VK вернул ошибку: '+oauthError+(params.get('error_description')?(' — '+params.get('error_description')):'');
+function readableError(e){
+  if(e?.error_data?.error_reason) return e.error_data.error_reason;
+  if(e?.error_data?.error_msg) return e.error_data.error_msg;
+  if(e?.message) return e.message;
+  return String(e);
 }
-if(code){
-  const expected=localStorage.getItem('vk_server_oauth_state');
-  if(expected && returnedState && expected!==returnedState){
-    errorEl.textContent='Проверка state не прошла. Получите новый код ещё раз.';
-  }else{
-    codeEl.value=code;
-    codeBox.style.display='block';
+
+testBtn.addEventListener('click', async()=>{
+  testBtn.disabled=true;
+  resultEl.textContent='';
+  errorEl.textContent='';
+  statusEl.textContent='Открываю официальное окно публикации VK…';
+  try{
+    const data=await vkBridge.send('VKWebAppShowWallPostBox',{
+      owner_id:-GROUP_ID,
+      from_group:1,
+      message:TEXT,
+      upload_attachments:[{type:'photo',link:IMAGE_URL}]
+    });
+    const postId=data?.post_id;
+    statusEl.textContent='VK завершил публикацию.';
+    if(postId){
+      resultEl.innerHTML=`Готово ✅ <a href="https://vk.com/wall-${GROUP_ID}_${postId}" target="_blank" rel="noopener">Открыть пост</a>`;
+    }else{
+      resultEl.textContent='Готово ✅ Проверь стену сообщества.';
+    }
+  }catch(e){
+    const msg=readableError(e);
+    statusEl.textContent='Публикация не выполнена.';
+    errorEl.textContent='Ошибка VK: '+msg+'\n\nЕсли на компьютере фото не прикрепляется, открой это же приложение в мобильном VK — для загрузки фотографии по ссылке мобильный клиент работает надёжнее.';
+  }finally{
+    testBtn.disabled=false;
   }
-}
-
-authBtn.addEventListener('click',()=>{
-  const bytes=new Uint8Array(16);crypto.getRandomValues(bytes);
-  const state=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
-  localStorage.setItem('vk_server_oauth_state',state);
-  const q=new URLSearchParams({
-    client_id:String(APP_ID),
-    display:'page',
-    redirect_uri:REDIRECT_URI,
-    scope:'photos',
-    response_type:'code',
-    v:'5.199',
-    state
-  });
-  window.open('https://oauth.vk.com/authorize?'+q.toString(),'_blank','noopener');
-});
-
-document.getElementById('copyBtn').addEventListener('click',async()=>{
-  try{await navigator.clipboard.writeText(codeEl.value);}
-  catch(e){codeEl.select();document.execCommand('copy');}
 });
 
 initVK();
 </script>
-</body></html>
+</body>
+</html>
