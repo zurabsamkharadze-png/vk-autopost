@@ -15,32 +15,25 @@
     .muted{color:#666;font-size:14px;line-height:1.5}
     .ok{color:#167c38;font-weight:700;white-space:pre-wrap}
     .err{color:#b3261e;white-space:pre-wrap;line-height:1.5}
-    .preview{margin:18px 0;padding:16px;background:#f7f8fa;border-radius:14px}
-    .preview img{width:100%;max-height:320px;object-fit:cover;border-radius:12px;display:block;margin-bottom:12px}
     .steps{white-space:pre-wrap;background:#f7f8fa;border-radius:12px;padding:12px;margin-top:14px;font:14px/1.45 Arial,sans-serif}
   </style>
 </head>
 <body>
 <main><div class="card">
   <h1>GeoTrips VK Helper</h1>
-  <p>Новый тест: загружаем настоящее фото на стену сообщества напрямую из мини-приложения. Токен остаётся только внутри VK и нигде не показывается.</p>
+  <p>Новый тест без загрузки через браузер: пробуем скопировать уже загруженную в VK фотографию во внутренний альбом «Сохранённые фотографии».</p>
+  <p class="muted">Пост НЕ публикуется. Токен нигде не показывается и никуда не отправляется.</p>
   <p id="status" class="muted">Инициализация VK…</p>
-
-  <div class="preview">
-    <img src="https://cdn.tripster.ru/photos/24f5f5d1-c62f-410a-9c57-d66e6114b578.jpg" alt="Кахетия — Tripster">
-    <p class="muted">Тестовое фото Tripster. На этом этапе пост НЕ публикуется — мы только проверяем нативную загрузку фотографии в VK.</p>
-  </div>
-
-  <button id="testBtn" disabled>Проверить нативную загрузку фото</button>
+  <button id="testBtn" disabled>Проверить копирование фото внутри VK</button>
   <div id="steps" class="steps">Ожидание…</div>
   <div id="result" class="ok" style="margin-top:16px"></div>
   <div id="error" class="err" style="margin-top:16px"></div>
 </div></main>
 <script>
 const APP_ID=54792536;
-const GROUP_ID=241800139;
 const API_VERSION='5.199';
-const IMAGE_URL='https://cdn.tripster.ru/photos/24f5f5d1-c62f-410a-9c57-d66e6114b578.jpg';
+const SOURCE_OWNER_ID=-241800139;
+const SOURCE_PHOTO_ID=457239017;
 
 const statusEl=document.getElementById('status');
 const testBtn=document.getElementById('testBtn');
@@ -75,41 +68,22 @@ async function init(){
 testBtn.addEventListener('click',async()=>{
   testBtn.disabled=true;resultEl.textContent='';errorEl.textContent='';
   try{
-    step('1/5 — Запрашиваем разрешение photos у VK…');
+    step('1/3 — Запрашиваем разрешение photos у VK…');
     const auth=await vkBridge.send('VKWebAppGetAuthToken',{app_id:APP_ID,scope:'photos'});
     const token=auth?.access_token;
     if(!token)throw new Error('VK не вернул пользовательский токен');
 
-    step('2/5 — Получаем сервер нативной загрузки стены…');
-    const server=await api('photos.getWallUploadServer',token,{group_id:GROUP_ID});
-    if(!server?.upload_url)throw new Error('VK не вернул upload_url');
+    step('2/3 — Просим VK скопировать фото внутри своей системы…');
+    const copiedId=await api('photos.copy',token,{owner_id:SOURCE_OWNER_ID,photo_id:SOURCE_PHOTO_ID});
+    if(!copiedId)throw new Error('VK не вернул ID скопированной фотографии');
 
-    step('3/5 — Загружаем фото Tripster в браузер…');
-    const imageResp=await fetch(IMAGE_URL,{mode:'cors',credentials:'omit'});
-    if(!imageResp.ok)throw new Error('Не удалось получить фото Tripster: HTTP '+imageResp.status);
-    const blob=await imageResp.blob();
-    if(!blob.size)throw new Error('Фото Tripster пустое');
-
-    step('4/5 — Передаём фото на сервер загрузки VK…');
-    const form=new FormData();
-    form.append('photo',blob,'tripster.jpg');
-    const uploadResp=await fetch(server.upload_url,{method:'POST',body:form,mode:'cors'});
-    if(!uploadResp.ok)throw new Error('Сервер загрузки VK вернул HTTP '+uploadResp.status);
-    const uploaded=await uploadResp.json();
-    if(!uploaded?.photo || uploaded?.server===undefined || !uploaded?.hash)throw new Error('VK вернул неполный ответ загрузки');
-
-    step('5/5 — Сохраняем фотографию как нативное фото стены…');
-    const saved=await api('photos.saveWallPhoto',token,{group_id:GROUP_ID,photo:uploaded.photo,server:uploaded.server,hash:uploaded.hash});
-    const photo=Array.isArray(saved)?saved[0]:null;
-    if(!photo?.id)throw new Error('VK не вернул сохранённую фотографию');
-
-    const attachment='photo'+photo.owner_id+'_'+photo.id+(photo.access_key?'_'+photo.access_key:'');
-    step('Все 5 шагов выполнены.');
-    resultEl.textContent='Успех ✅ Нативное фото загружено в VK.\nAttachment: '+attachment+'\nПост не опубликован.';
+    step('3/3 — Проверяем результат…');
+    resultEl.textContent='Успех ✅ VK скопировал фотографию без браузерной загрузки.\nНовый photo_id: '+copiedId+'\nПост не опубликован.';
     statusEl.textContent='Тест завершён успешно.';
+    step('Все 3 шага выполнены.');
   }catch(e){
-    statusEl.textContent='Тест остановлен на одном из этапов.';
-    errorEl.textContent='Ошибка: '+errText(e)+'\n\nСкопируй только текст ошибки или пришли скрин. Токен нигде не показывается.';
+    statusEl.textContent='Тест остановлен.';
+    errorEl.textContent='Ошибка: '+errText(e)+'\n\nПришли мне только этот текст ошибки. Токен нигде не показывается.';
   }finally{testBtn.disabled=false;}
 });
 
