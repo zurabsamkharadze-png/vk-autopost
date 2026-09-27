@@ -27,7 +27,7 @@ def vk_call(method: str, token: str, **params):
     req = urllib.request.Request(
         f"{VK_API_BASE}/{method}",
         data=data,
-        headers={"User-Agent": "geotrips-vk-autopost/1.8"},
+        headers={"User-Agent": "geotrips-vk-autopost/1.9"},
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=45) as response:
@@ -76,7 +76,7 @@ def multipart_upload(url: str, field_name: str, filename: str, content_type: str
         headers={
             "Content-Type": f"multipart/form-data; boundary={boundary}",
             "Content-Length": str(len(body)),
-            "User-Agent": "geotrips-vk-autopost/1.8",
+            "User-Agent": "geotrips-vk-autopost/1.9",
         },
         method="POST",
     )
@@ -97,38 +97,8 @@ def upload_wall_photo(user_token: str, group_id: int, image_url: str) -> str:
         hash=uploaded["hash"],
     )
     if not saved:
-        raise RuntimeError("VK did not return saved photo data")
+        raise RuntimeError("VK did not return saved wall photo data")
     photo = saved[0]
-    attachment = f"photo{photo['owner_id']}_{photo['id']}"
-    if photo.get("access_key"):
-        attachment += f"_{photo['access_key']}"
-    return attachment
-
-
-def upload_message_photo(group_token: str, image_url: str) -> str:
-    """Upload a real VK photo with the community token via messages photo API."""
-    server = vk_call("photos.getMessagesUploadServer", group_token)
-    upload_url = server["upload_url"]
-    path = urllib.parse.urlparse(upload_url).path
-    filename, content_type, content = download_image(image_url)
-    field_name = "file1" if "bulk_upload" in path else "photo"
-    uploaded = multipart_upload(upload_url, field_name, filename, content_type, content)
-
-    photo_payload = uploaded.get("photo")
-    if not photo_payload or str(photo_payload).strip() in ("", "[]", "{}", "None"):
-        raise RuntimeError("VK message photo upload did not return a savable photo payload")
-
-    saved = vk_call(
-        "photos.saveMessagesPhoto",
-        group_token,
-        photo=photo_payload,
-        server=uploaded.get("server"),
-        hash=uploaded.get("hash"),
-    )
-    if not saved:
-        raise RuntimeError("VK did not return saved message photo data")
-    photo = saved[0]
-    print(f"Saved community photo owner_id={photo.get('owner_id')} id={photo.get('id')}")
     attachment = f"photo{photo['owner_id']}_{photo['id']}"
     if photo.get("access_key"):
         attachment += f"_{photo['access_key']}"
@@ -204,14 +174,16 @@ def main():
     attachments = []
     image_url = str(post.get("image_url", "")).strip()
 
-    if image_url and user_token:
-        print("Uploading native Tripster wall photo with user token...")
+    if image_url:
+        if not user_token:
+            fail(
+                "This queued post requires a native wall photo, but VK_USER_TOKEN is missing. "
+                "A community token can publish wall text but cannot use photos.getWallUploadServer. "
+                "Publication stopped so the post is not sent without its photo."
+            )
+        print("Uploading native Tripster wall photo with VK user token...")
         attachments.append(upload_wall_photo(user_token, group_id, image_url))
         post["photo_mode"] = "native_wall_photo"
-    elif image_url:
-        print("Uploading Tripster image as a VK photo through the community messages photo API...")
-        attachments.append(upload_message_photo(group_token, image_url))
-        post["photo_mode"] = "community_message_photo_on_wall"
 
     for attachment in post.get("attachments", []) or []:
         value = str(attachment).strip()
@@ -219,7 +191,7 @@ def main():
             attachments.append(value)
 
     post_id = str(post.get("id") or uuid.uuid4().hex)
-    guid = hashlib.sha256((post_id + "-direct-photo").encode("utf-8")).hexdigest()[:32]
+    guid = hashlib.sha256(post_id.encode("utf-8")).hexdigest()[:32]
 
     result = vk_call(
         "wall.post",
