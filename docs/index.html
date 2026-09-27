@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
   <title>GeoTrips VK Helper</title>
+  <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
   <style>
     body{font-family:Arial,sans-serif;background:#f5f5f7;color:#111;margin:0}
     main{max-width:680px;margin:40px auto;padding:24px}
@@ -18,9 +19,9 @@
 <body>
 <main><div class="card">
   <h1>GeoTrips VK Helper</h1>
-  <p>Получение одноразового кода для серверной авторизации VK. Код нужен, чтобы GitHub получил пользовательский токен, пригодный для загрузки обычных фотографий на стену сообщества.</p>
-  <p class="muted">Защищённый ключ приложения здесь не используется и на эту страницу не передаётся.</p>
-  <button id="serverAuthBtn">Получить серверный код VK</button>
+  <p>Получение одноразового кода для серверной авторизации VK.</p>
+  <p id="vkStatus" class="muted">Инициализация VK…</p>
+  <button id="serverAuthBtn" disabled>Получить серверный код VK</button>
   <p class="muted">VK откроется в новой вкладке. Разрешите доступ к фотографиям, после чего вы вернётесь на эту страницу.</p>
   <div id="codeBox">
     <p class="ok">Код получен ✅</p>
@@ -41,6 +42,23 @@ const oauthError=params.get('error');
 const errorEl=document.getElementById('error');
 const codeBox=document.getElementById('codeBox');
 const codeEl=document.getElementById('code');
+const statusEl=document.getElementById('vkStatus');
+const authBtn=document.getElementById('serverAuthBtn');
+
+async function initVK(){
+  try{
+    if(window.vkBridge){
+      await vkBridge.send('VKWebAppInit');
+      statusEl.textContent='VK готов.';
+    }else{
+      statusEl.textContent='Страница открыта. VK Bridge не найден, но авторизация доступна.';
+    }
+    authBtn.disabled=false;
+  }catch(e){
+    statusEl.textContent='Страница открыта. Можно продолжить авторизацию.';
+    authBtn.disabled=false;
+  }
+}
 
 if(oauthError){
   errorEl.textContent='VK вернул ошибку: '+oauthError+(params.get('error_description')?(' — '+params.get('error_description')):'');
@@ -55,7 +73,7 @@ if(code){
   }
 }
 
-document.getElementById('serverAuthBtn').addEventListener('click',()=>{
+authBtn.addEventListener('click',()=>{
   const bytes=new Uint8Array(16);crypto.getRandomValues(bytes);
   const state=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
   localStorage.setItem('vk_server_oauth_state',state);
@@ -75,5 +93,7 @@ document.getElementById('copyBtn').addEventListener('click',async()=>{
   try{await navigator.clipboard.writeText(codeEl.value);}
   catch(e){codeEl.select();document.execCommand('copy');}
 });
+
+initVK();
 </script>
 </body></html>
