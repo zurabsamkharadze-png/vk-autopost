@@ -32,6 +32,7 @@ jobs:
       - name: Publish next queued post to VK
         env:
           VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
+          VK_USER_TOKEN: ${{ secrets.VK_USER_TOKEN }}
           VK_GROUP_ID: "241800139"
           VK_API_VERSION: "5.199"
         run: python run_publisher.py
