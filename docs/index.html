@@ -25,7 +25,7 @@
 <main>
   <div class="card">
     <h1>GeoTrips VK Helper</h1>
-    <p>Тестируем более простой способ: VK сам создаёт пост и загружает фотографию по ссылке через официальное окно публикации.</p>
+    <p>Тестируем публикацию через официальное окно VK с фотографией Tripster.</p>
     <p id="status" class="muted">Инициализация VK…</p>
 
     <div class="preview">
@@ -39,7 +39,7 @@ https://experience.tripster.ru/u/fbe94c83e8/</p>
     </div>
 
     <button id="testBtn" disabled>Открыть тестовую публикацию в VK</button>
-    <p class="muted">После нажатия VK покажет своё окно публикации. Проверь, что фотография видна, и только потом нажимай публикацию.</p>
+    <p class="muted">После нажатия VK покажет своё окно публикации. Сначала проверь, что фотография видна.</p>
     <div id="result" class="ok" style="margin-top:16px"></div>
     <div id="error" class="err" style="margin-top:16px"></div>
   </div>
@@ -81,7 +81,6 @@ testBtn.addEventListener('click', async()=>{
   try{
     const data=await vkBridge.send('VKWebAppShowWallPostBox',{
       owner_id:-GROUP_ID,
-      from_group:1,
       message:TEXT,
       upload_attachments:[{type:'photo',link:IMAGE_URL}]
     });
@@ -95,7 +94,7 @@ testBtn.addEventListener('click', async()=>{
   }catch(e){
     const msg=readableError(e);
     statusEl.textContent='Публикация не выполнена.';
-    errorEl.textContent='Ошибка VK: '+msg+'\n\nЕсли на компьютере фото не прикрепляется, открой это же приложение в мобильном VK — для загрузки фотографии по ссылке мобильный клиент работает надёжнее.';
+    errorEl.textContent='Ошибка VK: '+msg;
   }finally{
     testBtn.disabled=false;
   }
