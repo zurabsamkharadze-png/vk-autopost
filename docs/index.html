@@ -4,12 +4,44 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
-  <title>GeoTrips — Tripster previews</title>
+  <title>GeoTrips VK Helper</title>
+  <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
+  <style>
+    body{font-family:Arial,sans-serif;background:#f5f5f7;color:#111;margin:0}
+    main{max-width:620px;margin:40px auto;padding:24px}
+    .card{background:#fff;border-radius:18px;padding:24px;box-shadow:0 8px 30px rgba(0,0,0,.08)}
+    button{border:0;border-radius:10px;padding:13px 18px;font-size:16px;cursor:pointer;background:#2688eb;color:#fff}
+    #tokenBox{display:none;margin-top:20px}
+    textarea{width:100%;box-sizing:border-box;min-height:100px;padding:12px;border:1px solid #d7d7dc;border-radius:10px;resize:none}
+    .muted{color:#666;font-size:14px;line-height:1.5}.ok{color:#167c38;font-weight:700}.err{color:#b3261e;white-space:pre-wrap}
+  </style>
 </head>
 <body>
-  <main style="font-family:Arial,sans-serif;max-width:720px;margin:60px auto;padding:24px">
-    <h1>GeoTrips</h1>
-    <p>Служебные страницы предпросмотра экскурсий Tripster для публикаций VK.</p>
-  </main>
-</body>
-</html>
+<main><div class="card">
+  <h1>GeoTrips VK Helper</h1>
+  <p>Служебное мини-приложение для получения доступа только к фотографиям VK.</p>
+  <p class="muted">Токен никуда не отправляется и остаётся только в этом окне браузера. Не публикуйте его и не присылайте в чат.</p>
+  <button id="authBtn">Разрешить доступ к фотографиям</button>
+  <div id="status" class="muted" style="margin-top:16px">Инициализация VK…</div>
+  <div id="tokenBox">
+    <p class="ok">Доступ получен ✅</p>
+    <textarea id="token" readonly></textarea>
+    <div style="margin-top:10px"><button id="copyBtn">Скопировать токен</button></div>
+    <p id="expiry" class="muted"></p>
+    <p class="muted">Сохраните скопированное значение в GitHub Secrets под именем <b>VK_USER_TOKEN</b>.</p>
+  </div>
+  <div id="error" class="err" style="margin-top:16px"></div>
+</div></main>
+<script>
+const APP_ID=54792536;
+const statusEl=document.getElementById('status');
+const errorEl=document.getElementById('error');
+const tokenBox=document.getElementById('tokenBox');
+const tokenEl=document.getElementById('token');
+const expiryEl=document.getElementById('expiry');
+async function init(){try{await vkBridge.send('VKWebAppInit');statusEl.textContent='VK готов. Нажмите кнопку ниже.';}catch(e){statusEl.textContent='Откройте эту страницу именно как мини-приложение VK.';errorEl.textContent=String(e&&(e.error_data?.error_reason||e.message||e));}}
+document.getElementById('authBtn').addEventListener('click',async()=>{errorEl.textContent='';tokenBox.style.display='none';try{const data=await vkBridge.send('VKWebAppGetAuthToken',{app_id:APP_ID,scope:'photos'});if(!data||!data.access_token)throw new Error('VK не вернул access_token');tokenEl.value=data.access_token;tokenBox.style.display='block';statusEl.textContent='Разрешение photos получено.';expiryEl.textContent=data.expires?('Срок действия по ответу VK: '+data.expires):'VK не указал срок действия в ответе.';}catch(e){errorEl.textContent='Ошибка авторизации: '+String(e&&(e.error_data?.error_reason||e.message||e));}});
+document.getElementById('copyBtn').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(tokenEl.value);statusEl.textContent='Токен скопирован. Теперь сохраните его в GitHub Secret VK_USER_TOKEN.';}catch(e){tokenEl.select();document.execCommand('copy');statusEl.textContent='Токен скопирован.';}});
+init();
+</script>
+</body></html>
