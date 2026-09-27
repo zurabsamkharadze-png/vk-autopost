@@ -3,6 +3,7 @@ import hashlib
 import json
 import mimetypes
 import os
+import subprocess
 import sys
 import urllib.parse
 import urllib.request
@@ -12,6 +13,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 QUEUE_FILE = ROOT / "posts.json"
+ENCRYPTED_USER_TOKEN_FILE = ROOT / "vk_user_token.enc"
 VK_API_BASE = "https://api.vk.com/method"
 VK_API_VERSION = os.getenv("VK_API_VERSION", "5.199")
 
@@ -27,7 +29,7 @@ def vk_call(method: str, token: str, **params):
     req = urllib.request.Request(
         f"{VK_API_BASE}/{method}",
         data=data,
-        headers={"User-Agent": "geotrips-vk-autopost/1.9"},
+        headers={"User-Agent": "geotrips-vk-autopost/2.0"},
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=45) as response:
@@ -38,6 +40,32 @@ def vk_call(method: str, token: str, **params):
             f"VK API {method} failed: {err.get('error_code')} {err.get('error_msg')}"
         )
     return body.get("response")
+
+
+def decrypt_server_user_token(client_secret: str) -> str:
+    if not ENCRYPTED_USER_TOKEN_FILE.exists():
+        return ""
+    if not client_secret:
+        fail("Encrypted VK user token exists, but VK_CLIENT_SECRET is missing")
+    env = os.environ.copy()
+    env["VK_TOKEN_PASSPHRASE"] = client_secret
+    proc = subprocess.run(
+        [
+            "openssl", "enc", "-d", "-aes-256-cbc", "-pbkdf2", "-iter", "200000",
+            "-pass", "env:VK_TOKEN_PASSPHRASE", "-a", "-A"
+        ],
+        input=ENCRYPTED_USER_TOKEN_FILE.read_bytes(),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        env=env,
+        check=False,
+    )
+    if proc.returncode != 0:
+        fail("Could not decrypt the stored VK user token")
+    token = proc.stdout.decode("utf-8").strip()
+    if not token:
+        fail("Stored VK user token decrypted to an empty value")
+    return token
 
 
 def download_image(url: str):
@@ -76,7 +104,7 @@ def multipart_upload(url: str, field_name: str, filename: str, content_type: str
         headers={
             "Content-Type": f"multipart/form-data; boundary={boundary}",
             "Content-Length": str(len(body)),
-            "User-Agent": "geotrips-vk-autopost/1.9",
+            "User-Agent": "geotrips-vk-autopost/2.0",
         },
         method="POST",
     )
@@ -152,13 +180,18 @@ def normalized_group_id(raw: str) -> int:
 
 def main():
     group_token = os.getenv("VK_ACCESS_TOKEN", "").strip()
-    user_token = os.getenv("VK_USER_TOKEN", "").strip()
+    legacy_user_token = os.getenv("VK_USER_TOKEN", "").strip()
+    client_secret = os.getenv("VK_CLIENT_SECRET", "").strip()
     raw_group_id = os.getenv("VK_GROUP_ID", "").strip()
 
     if not group_token:
         fail("VK_ACCESS_TOKEN secret is missing")
     if not raw_group_id:
         fail("VK_GROUP_ID is missing")
+
+    server_user_token = decrypt_server_user_token(client_secret)
+    user_token = server_user_token or legacy_user_token
+    token_source = "encrypted server token" if server_user_token else "VK_USER_TOKEN secret"
 
     group_id = normalized_group_id(raw_group_id)
     posts = load_queue()
@@ -177,11 +210,10 @@ def main():
     if image_url:
         if not user_token:
             fail(
-                "This queued post requires a native wall photo, but VK_USER_TOKEN is missing. "
-                "A community token can publish wall text but cannot use photos.getWallUploadServer. "
+                "This queued post requires a native wall photo, but no usable VK user token is available. "
                 "Publication stopped so the post is not sent without its photo."
             )
-        print("Uploading native Tripster wall photo with VK user token...")
+        print(f"Uploading native Tripster wall photo with {token_source}...")
         attachments.append(upload_wall_photo(user_token, group_id, image_url))
         post["photo_mode"] = "native_wall_photo"
 

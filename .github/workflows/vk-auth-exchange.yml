@@ -1,20 +1,13 @@
-name: VK Autopost
+name: VK Server Token Exchange
 
 on:
   workflow_dispatch:
-  schedule:
-    # Georgia time: 11:00 and 19:00 (UTC+4)
-    - cron: "0 7,15 * * *"
 
 permissions:
   contents: write
 
-concurrency:
-  group: vk-autopost
-  cancel-in-progress: false
-
 jobs:
-  publish:
+  exchange:
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -29,25 +22,24 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Publish next queued post to VK
+      - name: Exchange VK authorization code
         env:
-          VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
-          VK_USER_TOKEN: ${{ secrets.VK_USER_TOKEN }}
           VK_CLIENT_SECRET: ${{ secrets.VK_CLIENT_SECRET }}
+          VK_AUTH_CODE: ${{ secrets.VK_AUTH_CODE }}
           VK_GROUP_ID: "241800139"
           VK_API_VERSION: "5.199"
-        run: python run_publisher.py
+        run: python exchange_vk_user_token.py
 
-      - name: Save queue state
+      - name: Save encrypted user token
         shell: bash
         run: |
-          if git diff --quiet -- posts.json; then
-            echo "Queue was not changed."
+          if git diff --quiet -- vk_user_token.enc; then
+            echo "Encrypted token file was not changed."
             exit 0
           fi
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add posts.json
-          git commit -m "chore: mark VK post as published"
+          git add vk_user_token.enc
+          git commit -m "chore: store encrypted VK server user token"
           git push

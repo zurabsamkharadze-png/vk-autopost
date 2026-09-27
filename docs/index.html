@@ -5,43 +5,75 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
   <title>GeoTrips VK Helper</title>
-  <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
   <style>
     body{font-family:Arial,sans-serif;background:#f5f5f7;color:#111;margin:0}
-    main{max-width:620px;margin:40px auto;padding:24px}
+    main{max-width:680px;margin:40px auto;padding:24px}
     .card{background:#fff;border-radius:18px;padding:24px;box-shadow:0 8px 30px rgba(0,0,0,.08)}
-    button{border:0;border-radius:10px;padding:13px 18px;font-size:16px;cursor:pointer;background:#2688eb;color:#fff}
-    #tokenBox{display:none;margin-top:20px}
-    textarea{width:100%;box-sizing:border-box;min-height:100px;padding:12px;border:1px solid #d7d7dc;border-radius:10px;resize:none}
+    button,a.btn{display:inline-block;border:0;border-radius:10px;padding:13px 18px;font-size:16px;cursor:pointer;background:#2688eb;color:#fff;text-decoration:none}
+    textarea{width:100%;box-sizing:border-box;min-height:84px;padding:12px;border:1px solid #d7d7dc;border-radius:10px;resize:none}
     .muted{color:#666;font-size:14px;line-height:1.5}.ok{color:#167c38;font-weight:700}.err{color:#b3261e;white-space:pre-wrap}
+    #codeBox{display:none;margin-top:20px;padding-top:16px;border-top:1px solid #eee}
   </style>
 </head>
 <body>
 <main><div class="card">
   <h1>GeoTrips VK Helper</h1>
-  <p>Служебное мини-приложение для получения доступа только к фотографиям VK.</p>
-  <p class="muted">Токен никуда не отправляется и остаётся только в этом окне браузера. Не публикуйте его и не присылайте в чат.</p>
-  <button id="authBtn">Разрешить доступ к фотографиям</button>
-  <div id="status" class="muted" style="margin-top:16px">Инициализация VK…</div>
-  <div id="tokenBox">
-    <p class="ok">Доступ получен ✅</p>
-    <textarea id="token" readonly></textarea>
-    <div style="margin-top:10px"><button id="copyBtn">Скопировать токен</button></div>
-    <p id="expiry" class="muted"></p>
-    <p class="muted">Сохраните скопированное значение в GitHub Secrets под именем <b>VK_USER_TOKEN</b>.</p>
+  <p>Получение одноразового кода для серверной авторизации VK. Код нужен, чтобы GitHub получил пользовательский токен, пригодный для загрузки обычных фотографий на стену сообщества.</p>
+  <p class="muted">Защищённый ключ приложения здесь не используется и на эту страницу не передаётся.</p>
+  <button id="serverAuthBtn">Получить серверный код VK</button>
+  <p class="muted">VK откроется в новой вкладке. Разрешите доступ к фотографиям, после чего вы вернётесь на эту страницу.</p>
+  <div id="codeBox">
+    <p class="ok">Код получен ✅</p>
+    <textarea id="code" readonly></textarea>
+    <div style="margin-top:10px"><button id="copyBtn">Скопировать код</button></div>
+    <p class="muted">Этот код одноразовый и быстро истекает. Сохраните его в GitHub Secrets под именем <b>VK_AUTH_CODE</b>. Сам код в чат не присылайте.</p>
+    <a class="btn" href="https://github.com/zurabsamkharadze-png/vk-autopost/settings/secrets/actions" target="_blank" rel="noopener">Открыть GitHub Secrets</a>
   </div>
   <div id="error" class="err" style="margin-top:16px"></div>
 </div></main>
 <script>
 const APP_ID=54792536;
-const statusEl=document.getElementById('status');
+const REDIRECT_URI='https://zurabsamkharadze-png.github.io/vk-autopost/';
+const params=new URLSearchParams(window.location.search);
+const code=params.get('code');
+const returnedState=params.get('state');
+const oauthError=params.get('error');
 const errorEl=document.getElementById('error');
-const tokenBox=document.getElementById('tokenBox');
-const tokenEl=document.getElementById('token');
-const expiryEl=document.getElementById('expiry');
-async function init(){try{await vkBridge.send('VKWebAppInit');statusEl.textContent='VK готов. Нажмите кнопку ниже.';}catch(e){statusEl.textContent='Откройте эту страницу именно как мини-приложение VK.';errorEl.textContent=String(e&&(e.error_data?.error_reason||e.message||e));}}
-document.getElementById('authBtn').addEventListener('click',async()=>{errorEl.textContent='';tokenBox.style.display='none';try{const data=await vkBridge.send('VKWebAppGetAuthToken',{app_id:APP_ID,scope:'photos'});if(!data||!data.access_token)throw new Error('VK не вернул access_token');tokenEl.value=data.access_token;tokenBox.style.display='block';statusEl.textContent='Разрешение photos получено.';expiryEl.textContent=data.expires?('Срок действия по ответу VK: '+data.expires):'VK не указал срок действия в ответе.';}catch(e){errorEl.textContent='Ошибка авторизации: '+String(e&&(e.error_data?.error_reason||e.message||e));}});
-document.getElementById('copyBtn').addEventListener('click',async()=>{try{await navigator.clipboard.writeText(tokenEl.value);statusEl.textContent='Токен скопирован. Теперь сохраните его в GitHub Secret VK_USER_TOKEN.';}catch(e){tokenEl.select();document.execCommand('copy');statusEl.textContent='Токен скопирован.';}});
-init();
+const codeBox=document.getElementById('codeBox');
+const codeEl=document.getElementById('code');
+
+if(oauthError){
+  errorEl.textContent='VK вернул ошибку: '+oauthError+(params.get('error_description')?(' — '+params.get('error_description')):'');
+}
+if(code){
+  const expected=localStorage.getItem('vk_server_oauth_state');
+  if(expected && returnedState && expected!==returnedState){
+    errorEl.textContent='Проверка state не прошла. Получите новый код ещё раз.';
+  }else{
+    codeEl.value=code;
+    codeBox.style.display='block';
+  }
+}
+
+document.getElementById('serverAuthBtn').addEventListener('click',()=>{
+  const bytes=new Uint8Array(16);crypto.getRandomValues(bytes);
+  const state=Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
+  localStorage.setItem('vk_server_oauth_state',state);
+  const q=new URLSearchParams({
+    client_id:String(APP_ID),
+    display:'page',
+    redirect_uri:REDIRECT_URI,
+    scope:'photos',
+    response_type:'code',
+    v:'5.199',
+    state
+  });
+  window.open('https://oauth.vk.com/authorize?'+q.toString(),'_blank','noopener');
+});
+
+document.getElementById('copyBtn').addEventListener('click',async()=>{
+  try{await navigator.clipboard.writeText(codeEl.value);}
+  catch(e){codeEl.select();document.execCommand('copy');}
+});
 </script>
 </body></html>
