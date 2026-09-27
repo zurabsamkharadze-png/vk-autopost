@@ -27,7 +27,7 @@ def vk_call(method: str, token: str, **params):
     req = urllib.request.Request(
         f"{VK_API_BASE}/{method}",
         data=data,
-        headers={"User-Agent": "geotrips-vk-autopost/1.3"},
+        headers={"User-Agent": "geotrips-vk-autopost/1.4"},
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=45) as response:
@@ -76,7 +76,7 @@ def multipart_upload(url: str, field_name: str, filename: str, content_type: str
         headers={
             "Content-Type": f"multipart/form-data; boundary={boundary}",
             "Content-Length": str(len(body)),
-            "User-Agent": "geotrips-vk-autopost/1.3",
+            "User-Agent": "geotrips-vk-autopost/1.4",
         },
         method="POST",
     )
@@ -102,43 +102,6 @@ def upload_wall_photo(user_token: str, group_id: int, image_url: str) -> str:
     attachment = f"photo{photo['owner_id']}_{photo['id']}"
     if photo.get("access_key"):
         attachment += f"_{photo['access_key']}"
-    return attachment
-
-
-def upload_wall_document(group_token: str, group_id: int, image_url: str) -> str:
-    """Upload an image as a wall document using a community token.
-
-    VK currently blocks photos.getWallUploadServer for community tokens, while
-    docs.getWallUploadServer accepts group authorization. JPEG/PNG documents
-    render with an image preview on the wall, so this gives us a no-user-token
-    fallback for Tripster excursion images.
-    """
-    server = vk_call("docs.getWallUploadServer", group_token, group_id=group_id)
-    filename, content_type, content = download_image(image_url)
-    uploaded = multipart_upload(server["upload_url"], "file", filename, content_type, content)
-    file_token = uploaded.get("file")
-    if not file_token:
-        raise RuntimeError(f"VK document upload did not return file token: {uploaded}")
-
-    saved = vk_call(
-        "docs.save",
-        group_token,
-        file=file_token,
-        title="Tripster excursion photo",
-    )
-    if not saved:
-        raise RuntimeError("VK did not return saved document data")
-
-    doc = saved.get("doc") if isinstance(saved, dict) else None
-    if not doc and isinstance(saved, list) and saved:
-        first = saved[0]
-        doc = first.get("doc") if isinstance(first, dict) and "doc" in first else first
-    if not isinstance(doc, dict) or "owner_id" not in doc or "id" not in doc:
-        raise RuntimeError(f"Unexpected docs.save response: {saved}")
-
-    attachment = f"doc{doc['owner_id']}_{doc['id']}"
-    if doc.get("access_key"):
-        attachment += f"_{doc['access_key']}"
     return attachment
 
 
@@ -211,14 +174,15 @@ def main():
     attachments = []
     image_url = str(post.get("image_url", "")).strip()
 
-    if image_url and user_token:
-        print("Uploading native photo to VK with user token...")
+    if image_url:
+        if not user_token:
+            fail(
+                "This post has a Tripster image, but VK_USER_TOKEN is missing. "
+                "VK community tokens cannot upload native wall photos; refusing to publish an ugly document fallback."
+            )
+        print("Uploading native Tripster photo to VK with user token...")
         attachments.append(upload_wall_photo(user_token, group_id, image_url))
         post["photo_mode"] = "native_photo"
-    elif image_url:
-        print("Uploading Tripster image to VK as a wall document with community token...")
-        attachments.append(upload_wall_document(group_token, group_id, image_url))
-        post["photo_mode"] = "vk_document_image"
 
     for attachment in post.get("attachments", []) or []:
         value = str(attachment).strip()
