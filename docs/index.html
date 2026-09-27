@@ -8,35 +8,34 @@
   <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
   <style>
     body{font-family:Arial,sans-serif;background:#f5f5f7;color:#111;margin:0}
-    main{max-width:820px;margin:30px auto;padding:18px}
+    main{max-width:840px;margin:30px auto;padding:18px}
     .card{background:#fff;border-radius:18px;padding:24px;box-shadow:0 8px 30px rgba(0,0,0,.08)}
-    .actions{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:18px 0}
+    .grid img{width:100%;height:220px;object-fit:cover;border-radius:12px;background:#eee}
+    .actions{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}
     button{border:0;border-radius:10px;padding:14px 18px;font-size:16px;cursor:pointer;background:#2688eb;color:#fff;font-weight:700}
     button.secondary{background:#4b5d6b}
     button:disabled{opacity:.55;cursor:not-allowed}
     .muted{color:#666;font-size:14px;line-height:1.5}
-    .ok{color:#167c38;font-weight:700;white-space:pre-wrap}
+    .ok{color:#167c38;font-weight:700;white-space:pre-wrap;line-height:1.5}
     .err{color:#b3261e;white-space:pre-wrap;line-height:1.5}
     .steps{white-space:pre-wrap;background:#f7f8fa;border-radius:12px;padding:12px;margin-top:14px;font:14px/1.5 Arial,sans-serif}
-    .plan{display:grid;gap:10px;margin:18px 0}
-    .item{padding:12px 14px;border:1px solid #e5e7eb;border-radius:12px;background:#fafafa}
-    .item b{display:block;margin-bottom:4px}
+    @media(max-width:640px){.grid{grid-template-columns:1fr}.grid img{height:240px}}
   </style>
 </head>
 <body>
 <main><div class="card">
   <h1>GeoTrips VK Helper</h1>
-  <p>Нативная загрузка фото Tripster уже работает. Теперь проверяем настоящий пост и планирование 5 публикаций в день.</p>
-  <p class="muted">VK запросит права <b>photos</b> и <b>wall</b>. Пользовательский токен остаётся внутри VK и не отправляется на наш сервер.</p>
+  <p>Подготовка нескольких нативных фото для одного поста VK.</p>
+  <p class="muted">Сейчас тестируем 4 реальные фотографии одной экскурсии Tripster: «Кахетия — родина вина, чачи и красоты!». Пост НЕ публикуется.</p>
   <p id="status" class="muted">Инициализация VK…</p>
 
-  <div class="actions">
-    <button id="publishBtn" disabled>Опубликовать 1 реальный пост сейчас</button>
-    <button id="scheduleBtn" class="secondary" disabled>Запланировать 5 постов на завтра</button>
-  </div>
+  <div class="grid" id="gallery"></div>
 
-  <h3>План на завтра</h3>
-  <div id="plan" class="plan"></div>
+  <div class="actions">
+    <button id="uploadBtn" disabled>Загрузить 4 фото в VK</button>
+    <button id="copyBtn" class="secondary" disabled>Скопировать attachments</button>
+  </div>
 
   <div id="steps" class="steps">Ожидание…</div>
   <div id="result" class="ok" style="margin-top:16px"></div>
@@ -47,50 +46,23 @@ const APP_ID=54792536;
 const GROUP_ID=241800139;
 const API_VERSION='5.199';
 const UPLOAD_PROXY='https://eppyjmtowtkxcwwhvwzp.supabase.co/functions/v1/khashuri-bundle-check-v14';
-const PARTNER='https://experience.tripster.ru/u/fbe94c83e8/';
-
-const POSTS=[
-  {
-    time:'09:00',
-    title:'Казбеги за один день: что важно знать перед поездкой',
-    image:'https://cdn.tripster.ru/photos/6a820056-eb54-4987-bbc3-d84300fac1b7.jpg',
-    text:`🏔 Казбеги за один день: что важно знать перед поездкой\n\nВоенно-Грузинская дорога — один из тех маршрутов, ради которых в Грузию хочется возвращаться. За один день можно увидеть Жинвальское водохранилище, Ананури, горные перевалы, Гудаури и пейзажи вокруг Казбека.\n\nЧто стоит учесть:\n• в горах погода меняется быстро — даже осенью пригодится тёплая вещь;\n• дорога длинная, поэтому удобная обувь и вода обязательны;\n• лучше не пытаться вместить в один день слишком много дополнительных остановок;\n• если не хочется думать о маршруте и парковках, удобнее ехать с организованной группой.\n\nОдин из популярных вариантов на Tripster — групповая поездка из Тбилиси в Казбеги и Гудаури. Актуальные даты и стоимость лучше проверять перед бронированием.\n\n👉 Смотреть варианты экскурсий: ${PARTNER}`
-  },
-  {
-    time:'12:00',
-    title:'Групповая поездка из Тбилиси — в Казбеги и Гудаури',
-    image:'https://cdn.tripster.ru/photos/6a820056-eb54-4987-bbc3-d84300fac1b7.jpg',
-    text:`🇬🇪 Групповая поездка из Тбилиси — в Казбеги и Гудаури\n\nОдин из самых зрелищных маршрутов Грузии: Военно-Грузинская дорога, горные вершины, реки, древние крепости и невероятные панорамы Кавказа.\n\n🚐 Групповой формат\n⏱ Около 11 часов\n👥 До 19 человек\n⭐ На Tripster у экскурсии высокий рейтинг и сотни отзывов\n\nПодойдёт тем, кто хочет за один день увидеть максимум горных пейзажей без самостоятельного планирования маршрута.\n\n👉 Актуальная цена и свободные даты:\n${PARTNER}`
-  },
-  {
-    time:'15:00',
-    title:'Кахетия за один день: как сделать поездку действительно приятной',
-    image:'https://cdn.tripster.ru/photos/24f5f5d1-c62f-410a-9c57-d66e6114b578.jpg',
-    text:`🍇 Кахетия за один день: как сделать поездку действительно приятной\n\nКахетия — это не только дегустации. Это Алазанская долина, Сигнахи, монастырь Бодбе, Телави, семейные винодельни и совсем другой ритм Грузии.\n\nЕсли едете впервые, не пытайтесь посетить десять виноделен за день. Гораздо приятнее выбрать несколько хороших остановок, оставить время на прогулку и спокойно посмотреть пейзажи.\n\nДля однодневной поездки из Тбилиси удобнее всего маршрут, где уже продуманы транспорт, основные локации и дегустации. Тогда не приходится считать километры и думать, кто будет за рулём после вина 🙂\n\n👉 Посмотреть экскурсии по Кахетии и свободные даты:\n${PARTNER}`
-  },
-  {
-    time:'18:00',
-    title:'По Тбилиси — душевно и зажигательно!',
-    image:'https://cdn.tripster.ru/photos/0c660a6f-b117-4964-a40e-c8eee7b5e540.jpg',
-    text:`❤️ Тбилиси, который лучше узнавать пешком\n\nСтарые дворики, балконы, запах свежего хлеба, узкие улицы и места, которые легко пройти мимо без человека, знающего город.\n\nОдна из самых популярных прогулок на Tripster — «По Тбилиси — душевно и зажигательно!». Это формат для тех, кто хочет не просто увидеть достопримечательности, а почувствовать характер города.\n\n🚶 Пешая экскурсия\n⏱ Около 3,5 часа\n⭐ Тысячи отзывов путешественников\n\n👉 Проверить расписание и актуальную стоимость:\n${PARTNER}`
-  },
-  {
-    time:'21:00',
-    title:'Кахетия — родина вина, чачи и красоты!',
-    image:'https://cdn.tripster.ru/photos/24f5f5d1-c62f-410a-9c57-d66e6114b578.jpg',
-    text:`🍷 Кахетия — родина вина, чачи и красоты!\n\nАлазанская долина, монастырь Бодбе, Сигнахи и Телави — насыщенный маршрут для знакомства с винным регионом Грузии.\n\n🚌 Групповая экскурсия из Тбилиси\n⏱ Около 11 часов\n👥 До 17 человек\n⭐ Рейтинг на Tripster — около 4,95\n\nВ программе — история Кахетии, грузинское виноделие, красивые виды и дегустации.\n\n👉 Актуальную цену, скидку и свободные даты смотрите перед бронированием:\n${PARTNER}`
-  }
+const IMAGE_URLS=[
+  'https://cdn.tripster.ru/photos/24f5f5d1-c62f-410a-9c57-d66e6114b578.jpg',
+  'https://cdn.tripster.ru/photos/a8a2acaf-5c4b-467d-b767-642c89814e6c.jpg',
+  'https://cdn.tripster.ru/photos/a0357964-fdf9-42cc-b203-a9f329c900ea.jpg',
+  'https://cdn.tripster.ru/photos/ec146aca-a100-42b9-920a-72c90f67cf20.jpg'
 ];
 
 const statusEl=document.getElementById('status');
-const publishBtn=document.getElementById('publishBtn');
-const scheduleBtn=document.getElementById('scheduleBtn');
+const uploadBtn=document.getElementById('uploadBtn');
+const copyBtn=document.getElementById('copyBtn');
 const stepsEl=document.getElementById('steps');
 const resultEl=document.getElementById('result');
 const errorEl=document.getElementById('error');
-const planEl=document.getElementById('plan');
+const galleryEl=document.getElementById('gallery');
+let lastAttachments=[];
 
-planEl.innerHTML=POSTS.map(p=>`<div class="item"><b>${p.time} — ${p.title}</b><span class="muted">Фото: Tripster</span></div>`).join('');
+galleryEl.innerHTML=IMAGE_URLS.map((u,i)=>`<img src="${u}" alt="Tripster фото ${i+1}">`).join('');
 
 function step(text){stepsEl.textContent=text;}
 function errText(e){
@@ -104,87 +76,78 @@ async function api(method,token,params={}){
   return r?.response;
 }
 async function getToken(){
-  const auth=await vkBridge.send('VKWebAppGetAuthToken',{app_id:APP_ID,scope:'photos,wall'});
+  const auth=await vkBridge.send('VKWebAppGetAuthToken',{app_id:APP_ID,scope:'photos'});
   if(!auth?.access_token)throw new Error('VK не вернул пользовательский токен');
   return auth.access_token;
 }
-async function uploadPhoto(token,imageUrl,label='фото'){
+async function uploadPhoto(token,imageUrl,index,total){
+  step(`${index}/${total} — Получаем сервер загрузки VK…`);
   const server=await api('photos.getWallUploadServer',token,{group_id:GROUP_ID});
-  if(!server?.upload_url)throw new Error('VK не вернул upload_url для '+label);
+  if(!server?.upload_url)throw new Error('VK не вернул upload_url для фото '+index);
+
+  step(`${index}/${total} — Передаём фото ${index} через сервер…`);
   const proxyResp=await fetch(UPLOAD_PROXY,{
-    method:'POST',headers:{'content-type':'application/json'},
+    method:'POST',
+    headers:{'content-type':'application/json'},
     body:JSON.stringify({upload_url:server.upload_url,image_url:imageUrl})
   });
   const proxyData=await proxyResp.json().catch(()=>null);
-  if(!proxyResp.ok || !proxyData?.ok)throw new Error('Прокси: '+(proxyData?.error || ('HTTP '+proxyResp.status))+(proxyData?.message?' — '+proxyData.message:''));
+  if(!proxyResp.ok || !proxyData?.ok){
+    throw new Error('Фото '+index+': '+(proxyData?.error || ('HTTP '+proxyResp.status))+(proxyData?.message?' — '+proxyData.message:''));
+  }
   const u=proxyData.uploaded;
-  if(!u?.photo || u?.server===undefined || !u?.hash)throw new Error('VK вернул неполный ответ загрузки');
+  if(!u?.photo || u?.server===undefined || !u?.hash)throw new Error('VK вернул неполный ответ для фото '+index);
+
+  step(`${index}/${total} — Сохраняем фото ${index} в VK…`);
   const saved=await api('photos.saveWallPhoto',token,{group_id:GROUP_ID,photo:u.photo,server:u.server,hash:u.hash});
   const photo=Array.isArray(saved)?saved[0]:null;
-  if(!photo?.id)throw new Error('VK не вернул сохранённую фотографию');
+  if(!photo?.id)throw new Error('VK не вернул сохранённое фото '+index);
   return 'photo'+photo.owner_id+'_'+photo.id+(photo.access_key?'_'+photo.access_key:'');
-}
-function georgiaTomorrowAt(hhmm){
-  const now=new Date();
-  const georgiaNow=new Date(now.getTime()+4*60*60*1000);
-  const y=georgiaNow.getUTCFullYear();
-  const m=georgiaNow.getUTCMonth();
-  const d=georgiaNow.getUTCDate()+1;
-  const [hh,mm]=hhmm.split(':').map(Number);
-  return Math.floor(Date.UTC(y,m,d,hh-4,mm,0)/1000);
 }
 
 async function init(){
   try{
     if(!window.vkBridge)throw new Error('VK Bridge не загрузился');
     await vkBridge.send('VKWebAppInit');
-    statusEl.textContent='VK готов. Можно публиковать и планировать.';
-    publishBtn.disabled=false;scheduleBtn.disabled=false;
+    statusEl.textContent='VK готов. Можно загрузить 4 фото.';
+    uploadBtn.disabled=false;
   }catch(e){
-    statusEl.textContent='Ошибка инициализации.';errorEl.textContent=errText(e);
+    statusEl.textContent='Ошибка инициализации.';
+    errorEl.textContent=errText(e);
   }
 }
 
-publishBtn.addEventListener('click',async()=>{
-  publishBtn.disabled=true;scheduleBtn.disabled=true;resultEl.textContent='';errorEl.textContent='';
+uploadBtn.addEventListener('click',async()=>{
+  uploadBtn.disabled=true;copyBtn.disabled=true;resultEl.textContent='';errorEl.textContent='';lastAttachments=[];
   try{
-    step('1/4 — Получаем права photos + wall…');
+    step('Получаем разрешение photos у VK…');
     const token=await getToken();
-    step('2/4 — Загружаем фото Кахетии в VK…');
-    const attachment=await uploadPhoto(token,POSTS[4].image,'Кахетия');
-    step('3/4 — Публикуем пост на стене сообщества…');
-    const r=await api('wall.post',token,{owner_id:-GROUP_ID,from_group:1,message:POSTS[4].text,attachments:attachment});
-    const postId=r?.post_id;
-    if(!postId)throw new Error('VK не вернул post_id');
-    step('4/4 — Готово.');
-    resultEl.innerHTML=`Успех ✅ Реальный пост опубликован.<br><a target="_blank" rel="noopener" href="https://vk.com/wall-${GROUP_ID}_${postId}">Открыть пост в VK</a>`;
-    statusEl.textContent='Публикация прошла успешно.';
+    for(let i=0;i<IMAGE_URLS.length;i++){
+      const a=await uploadPhoto(token,IMAGE_URLS[i],i+1,IMAGE_URLS.length);
+      lastAttachments.push(a);
+    }
+    step('Все 4 фотографии загружены. Пост не опубликован.');
+    resultEl.textContent='Успех ✅\n\nAttachments для одного поста:\n'+lastAttachments.join(',');
+    copyBtn.disabled=false;
+    statusEl.textContent='Готово: 4 нативных фото подготовлены для одного поста.';
   }catch(e){
-    statusEl.textContent='Публикация остановлена.';errorEl.textContent='Ошибка: '+errText(e);
-  }finally{publishBtn.disabled=false;scheduleBtn.disabled=false;}
+    statusEl.textContent='Загрузка остановлена.';
+    errorEl.textContent='Ошибка: '+errText(e);
+  }finally{
+    uploadBtn.disabled=false;
+  }
 });
 
-scheduleBtn.addEventListener('click',async()=>{
-  publishBtn.disabled=true;scheduleBtn.disabled=true;resultEl.textContent='';errorEl.textContent='';
+copyBtn.addEventListener('click',async()=>{
+  if(!lastAttachments.length)return;
+  const text=lastAttachments.join(',');
   try{
-    step('Получаем права photos + wall…');
-    const token=await getToken();
-    const done=[];
-    for(let i=0;i<POSTS.length;i++){
-      const p=POSTS[i];
-      step(`${i+1}/5 — ${p.time}: загружаем фото и ставим пост в отложку…`);
-      const attachment=await uploadPhoto(token,p.image,p.title);
-      const publishDate=georgiaTomorrowAt(p.time);
-      const r=await api('wall.post',token,{owner_id:-GROUP_ID,from_group:1,message:p.text,attachments:attachment,publish_date:publishDate});
-      if(!r?.post_id)throw new Error('VK не вернул post_id для '+p.time);
-      done.push(`${p.time} — post_id ${r.post_id}`);
-    }
-    step('Все 5 публикаций поставлены в очередь VK.');
-    resultEl.textContent='Готово ✅ На завтра запланировано 5 постов:\n'+done.join('\n');
-    statusEl.textContent='Планирование завершено.';
-  }catch(e){
-    statusEl.textContent='Планирование остановлено.';errorEl.textContent='Ошибка: '+errText(e)+'\n\nЕсли часть постов уже успела запланироваться, пришли этот текст — я проверю следующий шаг.';
-  }finally{publishBtn.disabled=false;scheduleBtn.disabled=false;}
+    await navigator.clipboard.writeText(text);
+    copyBtn.textContent='Скопировано ✓';
+    setTimeout(()=>copyBtn.textContent='Скопировать attachments',1600);
+  }catch{
+    resultEl.textContent+='\n\nНе удалось скопировать автоматически. Выдели строку выше вручную.';
+  }
 });
 
 init();
