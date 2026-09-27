@@ -8,8 +8,10 @@
   <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
   <style>
     body{font-family:Arial,sans-serif;background:#f5f5f7;color:#111;margin:0}
-    main{max-width:840px;margin:30px auto;padding:18px}
+    main{max-width:900px;margin:30px auto;padding:18px}
     .card{background:#fff;border-radius:18px;padding:24px;box-shadow:0 8px 30px rgba(0,0,0,.08)}
+    select{width:100%;padding:12px;border:1px solid #d9dde3;border-radius:10px;font-size:15px;background:#fff}
+    .tourbox{margin:14px 0;padding:14px;background:#f7f8fa;border-radius:12px;line-height:1.5}
     .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:18px 0}
     .grid img{width:100%;height:220px;object-fit:cover;border-radius:12px;background:#eee}
     .actions{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}
@@ -18,6 +20,7 @@
     button:disabled{opacity:.55;cursor:not-allowed}
     .muted{color:#666;font-size:14px;line-height:1.5}
     .ok{color:#167c38;font-weight:700;white-space:pre-wrap;line-height:1.5}
+    .warn{color:#9a6700;font-weight:700;white-space:pre-wrap;line-height:1.5}
     .err{color:#b3261e;white-space:pre-wrap;line-height:1.5}
     .steps{white-space:pre-wrap;background:#f7f8fa;border-radius:12px;padding:12px;margin-top:14px;font:14px/1.5 Arial,sans-serif}
     @media(max-width:640px){.grid{grid-template-columns:1fr}.grid img{height:240px}}
@@ -26,19 +29,23 @@
 <body>
 <main><div class="card">
   <h1>GeoTrips VK Helper</h1>
-  <p>Подготовка нескольких нативных фото для одного поста VK.</p>
-  <p class="muted">Сейчас тестируем 4 реальные фотографии одной экскурсии Tripster: «Кахетия — родина вина, чачи и красоты!». Пост НЕ публикуется.</p>
+  <p>Подготовка 3–4 нативных фото для пяти партнёрских туров Tripster.</p>
+  <p class="muted">Используются уменьшенные фотографии Tripster (800×600 / 600×800), чтобы не повторялась ошибка <b>image_too_large</b>. Посты здесь НЕ публикуются.</p>
   <p id="status" class="muted">Инициализация VK…</p>
 
+  <label for="tourSelect"><b>Выбери пост</b></label>
+  <select id="tourSelect"></select>
+  <div id="tourInfo" class="tourbox"></div>
   <div class="grid" id="gallery"></div>
 
   <div class="actions">
-    <button id="uploadBtn" disabled>Загрузить 4 фото в VK</button>
-    <button id="copyBtn" class="secondary" disabled>Скопировать attachments</button>
+    <button id="uploadBtn" disabled>Загрузить 4 фото выбранного поста</button>
+    <button id="copyBtn" class="secondary" disabled>Скопировать пакет</button>
   </div>
 
   <div id="steps" class="steps">Ожидание…</div>
   <div id="result" class="ok" style="margin-top:16px"></div>
+  <div id="warning" class="warn" style="margin-top:12px"></div>
   <div id="error" class="err" style="margin-top:16px"></div>
 </div></main>
 <script>
@@ -46,23 +53,88 @@ const APP_ID=54792536;
 const GROUP_ID=241800139;
 const API_VERSION='5.199';
 const UPLOAD_PROXY='https://eppyjmtowtkxcwwhvwzp.supabase.co/functions/v1/khashuri-bundle-check-v14';
-const IMAGE_URLS=[
-  'https://cdn.tripster.ru/photos/24f5f5d1-c62f-410a-9c57-d66e6114b578.jpg',
-  'https://cdn.tripster.ru/photos/a8a2acaf-5c4b-467d-b767-642c89814e6c.jpg',
-  'https://cdn.tripster.ru/photos/a0357964-fdf9-42cc-b203-a9f329c900ea.jpg',
-  'https://cdn.tripster.ru/photos/ec146aca-a100-42b9-920a-72c90f67cf20.jpg'
+
+const TOURS=[
+  {
+    id:'tour-georgia-main-2026-09-28-0900',time:'09:00',
+    title:'Главное в Грузии за одно путешествие: горы, города, вино',
+    partner:'https://experience.tripster.ru/u/57ef571945/',
+    images:[
+      'https://resize.tripster.ru/OmbDEsCZrTYbkZyVcRLNu7qzpzc=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/9ca13b0b-da4b-4351-8293-5a2948bed115.jpg',
+      'https://resize.tripster.ru/Mv0XcCZXuxDm0DCFT8U7yWlo2zk=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/a03654e4-400b-4310-91d5-9f78a48fbca3.jpg',
+      'https://resize.tripster.ru/wJ7M_C3vsJCtGjQIB0XNRhroM2I=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/7878da7d-9a76-41e6-9aa2-73c7b15dcaa1.jpg',
+      'https://resize.tripster.ru/L52B8Rnlvgu-vVF57i-IEW68yiE=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/6cbc73ea-b2ec-4e5c-b3d5-abb0c2af705d.jpg'
+    ]
+  },
+  {
+    id:'tour-tbilisi-batumi-2026-09-28-1200',time:'12:00',
+    title:'Из Тбилиси в Батуми: 4 древних города, грузинская кухня и морской бриз',
+    partner:'https://experience.tripster.ru/u/86913e567d/',
+    images:[
+      'https://resize.tripster.ru/gRLdzDIxU3Aw51eXv-9V9BIO3i8=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/de104592-087a-4412-9cfe-8e8d21e2f8d0.jpg',
+      'https://resize.tripster.ru/lx0iDf4nIiz4Ghi-3q39IHqxVkQ=/fit-in/600x800/filters:no_upscale()/https://cdn.tripster.ru/photos/31c017e7-7213-4d04-81f9-deb38bc9cfec.jpg',
+      'https://resize.tripster.ru/QgLMIWn4aj7T_B8aab7Romq8wcs=/fit-in/600x800/filters:no_upscale()/https://cdn.tripster.ru/photos/9b387430-2c0d-477b-984e-1146b9f703fb.jpg',
+      'https://resize.tripster.ru/cj1d0k-BJ5idUEVDQ8JQzsBBwpM=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/480877ee-ae49-43c1-b4b8-e4ce3367b1cc.jpg'
+    ]
+  },
+  {
+    id:'tour-tbilisi-mtskheta-kakheti-road-2026-09-28-1500',time:'15:00',
+    title:'Тбилиси, Мцхета, Кахетия и главное на Военно-Грузинской дороге: обзорный тур с дегустацией',
+    partner:'https://experience.tripster.ru/u/5d06eacdde/',
+    images:[
+      'https://resize.tripster.ru/I5Yrjs_y--QZXb33NGfl9tfJIdE=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/d45c25af-9858-4769-aba7-934360c4510d.jpg',
+      'https://resize.tripster.ru/J2Ha5Fp2RL0GjpfXGmEI3sYjtOQ=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/e87e5d12-4abe-4e76-8f2b-eff1e26281d2.jpg',
+      'https://resize.tripster.ru/gwTlSjSgBwXXrRA9tGfQr0DBcQk=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/09fba867-a245-4fa0-9174-9fadfe0aeb58.jpg',
+      'https://resize.tripster.ru/NCUy7WHwodgu_BSZAbb89YtpnB0=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/63ab1385-aa5d-4870-adc4-90325832d2a2.jpg'
+    ]
+  },
+  {
+    id:'tour-classic-georgia-2026-09-28-1800',time:'18:00',
+    title:'Классический тур в Грузию: контрастная архитектура, горы и многогранность вкусов',
+    partner:'https://experience.tripster.ru/u/df36d68706/',
+    images:[
+      'https://resize.tripster.ru/mcT6sBWc9FsR6igC-IBF5mX9PdI=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/360c6ca4-374e-42c0-9886-a5d380d880b0.jpg',
+      'https://resize.tripster.ru/TCyG3C8Km-EYEGwHKKxIBbPANtI=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/1c1638f7-1951-460e-92d5-00149994957c.jpg',
+      'https://resize.tripster.ru/i4Nn59ySlNXG1lxmZxyG118BLSI=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/dc8ec56d-0d43-439e-a14c-77a33f64ded9.jpg',
+      'https://resize.tripster.ru/ZLpPvwGahoFdqhl1uq8h__m8Zt0=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/936c21c4-3cf7-47ed-8fd0-bf3b919e8706.jpg'
+    ]
+  },
+  {
+    id:'tour-colorful-georgia-private-2026-09-28-2100',time:'21:00',
+    title:'Красочная Грузия индивидуально и с дегустацией: Тбилиси, Мцхета, Сигнахи, Боржоми и Казбеги',
+    partner:'https://experience.tripster.ru/u/ac7b45c90e/',
+    images:[
+      'https://resize.tripster.ru/8WSxQqRUnn3pVQk-Cl4LT6oBjEQ=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/efdbe6af-ca99-45d8-ba70-6984715bafcb.jpg',
+      'https://resize.tripster.ru/YBTYqJuazWXR1H9AT32wbgiXShg=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/a471e8e6-2c48-4918-b3ad-531968b694a7.jpg',
+      'https://resize.tripster.ru/HA13bavBl_OoOXzmpOAUeu-X_jM=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/a01d4616-adee-4ae1-b4b6-6c741be02c4e.jpg',
+      'https://resize.tripster.ru/ikLhKZVJN_C7eVDTespAOIzPQxo=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/0d8fdb22-038f-43be-b37e-c31c1b99eb55.jpg'
+    ]
+  }
 ];
 
 const statusEl=document.getElementById('status');
+const tourSelect=document.getElementById('tourSelect');
+const tourInfo=document.getElementById('tourInfo');
 const uploadBtn=document.getElementById('uploadBtn');
 const copyBtn=document.getElementById('copyBtn');
 const stepsEl=document.getElementById('steps');
 const resultEl=document.getElementById('result');
+const warningEl=document.getElementById('warning');
 const errorEl=document.getElementById('error');
 const galleryEl=document.getElementById('gallery');
-let lastAttachments=[];
+let lastPacket='';
 
-galleryEl.innerHTML=IMAGE_URLS.map((u,i)=>`<img src="${u}" alt="Tripster фото ${i+1}">`).join('');
+function currentTour(){return TOURS[Number(tourSelect.value)||0];}
+function renderTour(){
+  const t=currentTour();
+  tourInfo.innerHTML=`<b>${t.time} — ${t.title}</b><br><span class="muted">Партнёрская ссылка: ${t.partner}</span>`;
+  galleryEl.innerHTML=t.images.map((u,i)=>`<img src="${u}" alt="Tripster фото ${i+1}">`).join('');
+  resultEl.textContent='';warningEl.textContent='';errorEl.textContent='';lastPacket='';copyBtn.disabled=true;
+}
+
+tourSelect.innerHTML=TOURS.map((t,i)=>`<option value="${i}">${t.time} — ${t.title}</option>`).join('');
+tourSelect.addEventListener('change',renderTour);
+renderTour();
 
 function step(text){stepsEl.textContent=text;}
 function errText(e){
@@ -81,27 +153,19 @@ async function getToken(){
   return auth.access_token;
 }
 async function uploadPhoto(token,imageUrl,index,total){
-  step(`${index}/${total} — Получаем сервер загрузки VK…`);
+  step(`Фото ${index}/${total}: получаем сервер загрузки VK…`);
   const server=await api('photos.getWallUploadServer',token,{group_id:GROUP_ID});
-  if(!server?.upload_url)throw new Error('VK не вернул upload_url для фото '+index);
-
-  step(`${index}/${total} — Передаём фото ${index} через сервер…`);
-  const proxyResp=await fetch(UPLOAD_PROXY,{
-    method:'POST',
-    headers:{'content-type':'application/json'},
-    body:JSON.stringify({upload_url:server.upload_url,image_url:imageUrl})
-  });
+  if(!server?.upload_url)throw new Error('VK не вернул upload_url');
+  step(`Фото ${index}/${total}: передаём уменьшенное фото через сервер…`);
+  const proxyResp=await fetch(UPLOAD_PROXY,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({upload_url:server.upload_url,image_url:imageUrl})});
   const proxyData=await proxyResp.json().catch(()=>null);
-  if(!proxyResp.ok || !proxyData?.ok){
-    throw new Error('Фото '+index+': '+(proxyData?.error || ('HTTP '+proxyResp.status))+(proxyData?.message?' — '+proxyData.message:''));
-  }
+  if(!proxyResp.ok || !proxyData?.ok)throw new Error((proxyData?.error || ('HTTP '+proxyResp.status))+(proxyData?.message?' — '+proxyData.message:''));
   const u=proxyData.uploaded;
-  if(!u?.photo || u?.server===undefined || !u?.hash)throw new Error('VK вернул неполный ответ для фото '+index);
-
-  step(`${index}/${total} — Сохраняем фото ${index} в VK…`);
+  if(!u?.photo || u?.server===undefined || !u?.hash)throw new Error('VK вернул неполный ответ загрузки');
+  step(`Фото ${index}/${total}: сохраняем в VK…`);
   const saved=await api('photos.saveWallPhoto',token,{group_id:GROUP_ID,photo:u.photo,server:u.server,hash:u.hash});
   const photo=Array.isArray(saved)?saved[0]:null;
-  if(!photo?.id)throw new Error('VK не вернул сохранённое фото '+index);
+  if(!photo?.id)throw new Error('VK не вернул сохранённое фото');
   return 'photo'+photo.owner_id+'_'+photo.id+(photo.access_key?'_'+photo.access_key:'');
 }
 
@@ -109,45 +173,37 @@ async function init(){
   try{
     if(!window.vkBridge)throw new Error('VK Bridge не загрузился');
     await vkBridge.send('VKWebAppInit');
-    statusEl.textContent='VK готов. Можно загрузить 4 фото.';
+    statusEl.textContent='VK готов. Выбери тур и загрузи его фотографии.';
     uploadBtn.disabled=false;
-  }catch(e){
-    statusEl.textContent='Ошибка инициализации.';
-    errorEl.textContent=errText(e);
-  }
+  }catch(e){statusEl.textContent='Ошибка инициализации.';errorEl.textContent=errText(e);}
 }
 
 uploadBtn.addEventListener('click',async()=>{
-  uploadBtn.disabled=true;copyBtn.disabled=true;resultEl.textContent='';errorEl.textContent='';lastAttachments=[];
+  uploadBtn.disabled=true;tourSelect.disabled=true;copyBtn.disabled=true;resultEl.textContent='';warningEl.textContent='';errorEl.textContent='';lastPacket='';
+  const t=currentTour();
+  const attachments=[];const failures=[];
   try{
     step('Получаем разрешение photos у VK…');
     const token=await getToken();
-    for(let i=0;i<IMAGE_URLS.length;i++){
-      const a=await uploadPhoto(token,IMAGE_URLS[i],i+1,IMAGE_URLS.length);
-      lastAttachments.push(a);
+    for(let i=0;i<t.images.length;i++){
+      try{attachments.push(await uploadPhoto(token,t.images[i],i+1,t.images.length));}
+      catch(e){failures.push(`Фото ${i+1}: ${errText(e)}`);}
     }
-    step('Все 4 фотографии загружены. Пост не опубликован.');
-    resultEl.textContent='Успех ✅\n\nAttachments для одного поста:\n'+lastAttachments.join(',');
+    if(attachments.length<2)throw new Error('Удалось подготовить меньше двух фотографий. Пришли мне текст ошибок.');
+    lastPacket=JSON.stringify({id:t.id,time:t.time,title:t.title,partner:t.partner,attachments},null,2);
+    resultEl.textContent=`Успех ✅ Подготовлено фото: ${attachments.length}\n\n${lastPacket}`;
+    if(failures.length)warningEl.textContent='Некоторые фото пропущены:\n'+failures.join('\n')+'\n\nПост всё равно можно публиковать с '+attachments.length+' фото.';
+    step('Готово. Пост НЕ опубликован. Скопируй пакет и пришли его мне.');
+    statusEl.textContent=`Готово: ${attachments.length} нативных фото подготовлены.`;
     copyBtn.disabled=false;
-    statusEl.textContent='Готово: 4 нативных фото подготовлены для одного поста.';
-  }catch(e){
-    statusEl.textContent='Загрузка остановлена.';
-    errorEl.textContent='Ошибка: '+errText(e);
-  }finally{
-    uploadBtn.disabled=false;
-  }
+  }catch(e){statusEl.textContent='Загрузка остановлена.';errorEl.textContent='Ошибка: '+errText(e)+(failures.length?'\n'+failures.join('\n'):'');}
+  finally{uploadBtn.disabled=false;tourSelect.disabled=false;}
 });
 
 copyBtn.addEventListener('click',async()=>{
-  if(!lastAttachments.length)return;
-  const text=lastAttachments.join(',');
-  try{
-    await navigator.clipboard.writeText(text);
-    copyBtn.textContent='Скопировано ✓';
-    setTimeout(()=>copyBtn.textContent='Скопировать attachments',1600);
-  }catch{
-    resultEl.textContent+='\n\nНе удалось скопировать автоматически. Выдели строку выше вручную.';
-  }
+  if(!lastPacket)return;
+  try{await navigator.clipboard.writeText(lastPacket);copyBtn.textContent='Скопировано ✓';setTimeout(()=>copyBtn.textContent='Скопировать пакет',1600);}
+  catch{warningEl.textContent+='\nНе удалось скопировать автоматически — выдели JSON-пакет выше вручную.';}
 });
 
 init();
