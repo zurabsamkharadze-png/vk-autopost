@@ -27,7 +27,7 @@ def vk_call(method: str, token: str, **params):
     req = urllib.request.Request(
         f"{VK_API_BASE}/{method}",
         data=data,
-        headers={"User-Agent": "geotrips-vk-autopost/1.5"},
+        headers={"User-Agent": "geotrips-vk-autopost/1.6"},
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=45) as response:
@@ -76,7 +76,7 @@ def multipart_upload(url: str, field_name: str, filename: str, content_type: str
         headers={
             "Content-Type": f"multipart/form-data; boundary={boundary}",
             "Content-Length": str(len(body)),
-            "User-Agent": "geotrips-vk-autopost/1.5",
+            "User-Agent": "geotrips-vk-autopost/1.6",
         },
         method="POST",
     )
@@ -103,6 +103,33 @@ def upload_wall_photo(user_token: str, group_id: int, image_url: str) -> str:
     if photo.get("access_key"):
         attachment += f"_{photo['access_key']}"
     return attachment
+
+
+def upload_message_photo(group_token: str, image_url: str):
+    """Upload an image through the group-authorized messages photo endpoint.
+
+    VK 5.199 permits community tokens for photos.getMessagesUploadServer and
+    photos.saveMessagesPhoto. The saved photo is then supplied to wall.post as
+    link_photo_id so VK can build a normal link card without wall photo upload.
+    """
+    server = vk_call("photos.getMessagesUploadServer", group_token)
+    filename, content_type, content = download_image(image_url)
+    uploaded = multipart_upload(server["upload_url"], "photo", filename, content_type, content)
+    saved = vk_call(
+        "photos.saveMessagesPhoto",
+        group_token,
+        photo=uploaded["photo"],
+        server=uploaded["server"],
+        hash=uploaded["hash"],
+    )
+    if not saved:
+        raise RuntimeError("VK did not return saved message photo data")
+    photo = saved[0]
+    attachment = f"photo{photo['owner_id']}_{photo['id']}"
+    if photo.get("access_key"):
+        attachment += f"_{photo['access_key']}"
+    link_photo_id = f"{photo['owner_id']}_{photo['id']}"
+    return photo, attachment, link_photo_id
 
 
 def parse_iso_datetime(value):
@@ -174,13 +201,27 @@ def main():
     attachments = []
     image_url = str(post.get("image_url", "")).strip()
     preview_url = str(post.get("preview_url", "")).strip()
+    link_title = str(post.get("link_title", "")).strip()
+    if not link_title:
+        link_title = text.splitlines()[0].strip()[:120]
+
+    link_photo_id = ""
+    message_photo_attachment = ""
 
     if image_url and user_token:
         print("Uploading native Tripster photo to VK with user token...")
         attachments.append(upload_wall_photo(user_token, group_id, image_url))
         post["photo_mode"] = "native_photo"
+    elif image_url and preview_url:
+        print("Uploading Tripster image through community-token messages photo API...")
+        photo, message_photo_attachment, link_photo_id = upload_message_photo(group_token, image_url)
+        print(
+            "Saved community-token photo for link preview: "
+            f"owner_id={photo.get('owner_id')} id={photo.get('id')}"
+        )
+        attachments.append(preview_url)
+        post["photo_mode"] = "message_photo_link_preview"
     elif preview_url:
-        print("Attaching GeoTrips Open Graph preview page...")
         attachments.append(preview_url)
         post["photo_mode"] = "og_link_preview"
     elif image_url:
@@ -197,15 +238,30 @@ def main():
     post_id = str(post.get("id") or uuid.uuid4().hex)
     guid = hashlib.sha256(post_id.encode("utf-8")).hexdigest()[:32]
 
-    result = vk_call(
-        "wall.post",
-        group_token,
-        owner_id=-group_id,
-        from_group=1,
-        message=text,
-        attachments=",".join(attachments) if attachments else "",
-        guid=guid,
-    )
+    params = {
+        "owner_id": -group_id,
+        "from_group": 1,
+        "message": text,
+        "attachments": ",".join(attachments) if attachments else "",
+        "guid": guid,
+    }
+    if link_photo_id:
+        params["link_title"] = link_title
+        params["link_photo_id"] = link_photo_id
+
+    try:
+        result = vk_call("wall.post", group_token, **params)
+    except RuntimeError as first_error:
+        if not message_photo_attachment or not preview_url:
+            raise
+        print(f"Link-photo preview failed: {first_error}")
+        print("Retrying with the saved message photo attached directly beside the preview URL...")
+        params.pop("link_title", None)
+        params.pop("link_photo_id", None)
+        params["attachments"] = f"{message_photo_attachment},{preview_url}"
+        params["guid"] = hashlib.sha256((post_id + "-photo-link").encode("utf-8")).hexdigest()[:32]
+        result = vk_call("wall.post", group_token, **params)
+        post["photo_mode"] = "message_photo_attachment_with_link"
 
     vk_post_id = result.get("post_id") if isinstance(result, dict) else result
     post["status"] = "published"
