@@ -28,8 +28,9 @@
   },
   {
     "id": "tripster-kakheti-native-photo-test-2026-09-27",
-    "status": "queued",
+    "status": "blocked_ip_bound_token",
     "image_url": "https://cdn.tripster.ru/photos/24f5f5d1-c62f-410a-9c57-d66e6114b578.jpg",
-    "text": "🍷 Кахетия — родина вина, чачи и красоты! 🇬🇪\n\nСигнахи, Бодбе, Телави, Алазанская долина и дегустации — насыщенная групповая экскурсия из Тбилиси.\n\n👉 Актуальная цена и свободные даты на Tripster:\nhttps://experience.tripster.ru/u/fbe94c83e8/\n\nСохрани, если планируешь поездку в Кахетию 🍇"
+    "text": "🍷 Кахетия — родина вина, чачи и красоты! 🇬🇪\n\nСигнахи, Бодбе, Телави, Алазанская долина и дегустации — насыщенная групповая экскурсия из Тбилиси.\n\n👉 Актуальная цена и свободные даты на Tripster:\nhttps://experience.tripster.ru/u/fbe94c83e8/\n\nСохрани, если планируешь поездку в Кахетию 🍇",
+    "error": "VK user token is bound to the browser IP and cannot be used by GitHub Actions"
   }
 ]
