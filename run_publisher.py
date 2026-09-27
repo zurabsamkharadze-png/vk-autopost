@@ -27,7 +27,7 @@ def vk_call(method: str, token: str, **params):
     req = urllib.request.Request(
         f"{VK_API_BASE}/{method}",
         data=data,
-        headers={"User-Agent": "geotrips-vk-autopost/1.6"},
+        headers={"User-Agent": "geotrips-vk-autopost/1.7"},
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=45) as response:
@@ -76,7 +76,7 @@ def multipart_upload(url: str, field_name: str, filename: str, content_type: str
         headers={
             "Content-Type": f"multipart/form-data; boundary={boundary}",
             "Content-Length": str(len(body)),
-            "User-Agent": "geotrips-vk-autopost/1.6",
+            "User-Agent": "geotrips-vk-autopost/1.7",
         },
         method="POST",
     )
@@ -106,21 +106,40 @@ def upload_wall_photo(user_token: str, group_id: int, image_url: str) -> str:
 
 
 def upload_message_photo(group_token: str, image_url: str):
-    """Upload an image through the group-authorized messages photo endpoint.
-
-    VK 5.199 permits community tokens for photos.getMessagesUploadServer and
-    photos.saveMessagesPhoto. The saved photo is then supplied to wall.post as
-    link_photo_id so VK can build a normal link card without wall photo upload.
-    """
     server = vk_call("photos.getMessagesUploadServer", group_token)
+    upload_url = server["upload_url"]
+    path = urllib.parse.urlparse(upload_url).path
+    print(f"VK messages photo upload endpoint: {path}")
+
     filename, content_type, content = download_image(image_url)
-    uploaded = multipart_upload(server["upload_url"], "photo", filename, content_type, content)
+    field_name = "file1" if "bulk_upload" in path else "photo"
+    print(f"Using multipart field: {field_name}; content_type={content_type}; bytes={len(content)}")
+    uploaded = multipart_upload(upload_url, field_name, filename, content_type, content)
+    print(f"Upload response keys: {sorted(uploaded.keys())}")
+    if "photo" in uploaded:
+        photo_value = uploaded.get("photo")
+        print(f"Upload photo payload: {repr(photo_value)[:300]}")
+    if "files" in uploaded:
+        files = uploaded.get("files") or {}
+        print(f"Bulk files keys: {sorted(files.keys()) if isinstance(files, dict) else type(files).__name__}")
+        if isinstance(files, dict):
+            for key, item in files.items():
+                if isinstance(item, dict):
+                    print(f"Bulk {key} keys: {sorted(item.keys())}")
+    print(f"Upload server={uploaded.get('server')}; has_hash={bool(uploaded.get('hash'))}; has_request_id={bool(uploaded.get('request_id'))}")
+
+    photo_payload = uploaded.get("photo")
+    if not photo_payload or str(photo_payload).strip() in ("", "[]", "{}", "None"):
+        raise RuntimeError(
+            "VK message upload did not return the legacy photo payload needed by photos.saveMessagesPhoto"
+        )
+
     saved = vk_call(
         "photos.saveMessagesPhoto",
         group_token,
-        photo=uploaded["photo"],
-        server=uploaded["server"],
-        hash=uploaded["hash"],
+        photo=photo_payload,
+        server=uploaded.get("server"),
+        hash=uploaded.get("hash"),
     )
     if not saved:
         raise RuntimeError("VK did not return saved message photo data")
@@ -201,10 +220,7 @@ def main():
     attachments = []
     image_url = str(post.get("image_url", "")).strip()
     preview_url = str(post.get("preview_url", "")).strip()
-    link_title = str(post.get("link_title", "")).strip()
-    if not link_title:
-        link_title = text.splitlines()[0].strip()[:120]
-
+    link_title = str(post.get("link_title", "")).strip() or text.splitlines()[0].strip()[:120]
     link_photo_id = ""
     message_photo_attachment = ""
 
@@ -215,20 +231,14 @@ def main():
     elif image_url and preview_url:
         print("Uploading Tripster image through community-token messages photo API...")
         photo, message_photo_attachment, link_photo_id = upload_message_photo(group_token, image_url)
-        print(
-            "Saved community-token photo for link preview: "
-            f"owner_id={photo.get('owner_id')} id={photo.get('id')}"
-        )
+        print(f"Saved photo owner_id={photo.get('owner_id')} id={photo.get('id')}")
         attachments.append(preview_url)
         post["photo_mode"] = "message_photo_link_preview"
     elif preview_url:
         attachments.append(preview_url)
         post["photo_mode"] = "og_link_preview"
     elif image_url:
-        fail(
-            "This post has a Tripster image, but neither VK_USER_TOKEN nor preview_url is available. "
-            "Refusing to publish without a visual."
-        )
+        fail("Tripster image requires VK_USER_TOKEN or preview_url")
 
     for attachment in post.get("attachments", []) or []:
         value = str(attachment).strip()
@@ -237,7 +247,6 @@ def main():
 
     post_id = str(post.get("id") or uuid.uuid4().hex)
     guid = hashlib.sha256(post_id.encode("utf-8")).hexdigest()[:32]
-
     params = {
         "owner_id": -group_id,
         "from_group": 1,
