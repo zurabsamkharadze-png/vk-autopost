@@ -1,7 +1,7 @@
 [
   {
     "id": "tour-georgia-main-2026-09-28-0900",
-    "status": "queued",
+    "status": "published",
     "publish_after": "2026-09-28T05:00:00+00:00",
     "partner_link": "https://experience.tripster.ru/u/57ef571945/",
     "source_url": "https://experience.tripster.ru/experience/116651/",
@@ -16,7 +16,9 @@
     "attachments": [
       "photo200004513212_457239059_53b08a39b385afb115",
       "photo200004513212_457239060_a063834f74dcff71df"
-    ]
+    ],
+    "published_at": "2026-09-28T05:36:58.566106+00:00",
+    "vk_post_id": 7
   },
   {
     "id": "tour-tbilisi-batumi-2026-09-28-1200",
