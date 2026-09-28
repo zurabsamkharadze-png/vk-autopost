@@ -133,6 +133,33 @@ def upload_wall_photo(user_token: str, group_id: int, image_url: str) -> str:
     return attachment
 
 
+def upload_message_photo(group_token: str, image_url: str) -> str:
+    """Upload a VK photo through the community messages-photo endpoint and reuse it on the wall."""
+    server = vk_call("photos.getMessagesUploadServer", group_token)
+    upload_url = server["upload_url"]
+    path = urllib.parse.urlparse(upload_url).path
+    filename, content_type, content = download_image(image_url)
+    field_name = "file1" if "bulk_upload" in path else "photo"
+    uploaded = multipart_upload(upload_url, field_name, filename, content_type, content)
+    photo_payload = uploaded.get("photo")
+    if not photo_payload or str(photo_payload).strip() in ("", "[]", "{}", "None"):
+        raise RuntimeError("VK message photo upload did not return a savable photo payload")
+    saved = vk_call(
+        "photos.saveMessagesPhoto",
+        group_token,
+        photo=photo_payload,
+        server=uploaded.get("server"),
+        hash=uploaded.get("hash"),
+    )
+    if not saved:
+        raise RuntimeError("VK did not return saved message photo data")
+    photo = saved[0]
+    attachment = f"photo{photo['owner_id']}_{photo['id']}"
+    if photo.get("access_key"):
+        attachment += f"_{photo['access_key']}"
+    return attachment
+
+
 def parse_iso_datetime(value):
     if not value:
         return None
@@ -205,22 +232,34 @@ def main():
         fail(f"Queued post {post.get('id')} has empty text")
 
     attachments = []
-    image_url = str(post.get("image_url", "")).strip()
-
-    if image_url:
-        if not user_token:
-            fail(
-                "This queued post requires a native wall photo, but no usable VK user token is available. "
-                "Publication stopped so the post is not sent without its photo."
-            )
-        print(f"Uploading native Tripster wall photo with {token_source}...")
-        attachments.append(upload_wall_photo(user_token, group_id, image_url))
-        post["photo_mode"] = "native_wall_photo"
-
     for attachment in post.get("attachments", []) or []:
         value = str(attachment).strip()
         if value and value not in attachments:
             attachments.append(value)
+
+    image_url = str(post.get("image_url", "")).strip()
+    photo_strategy = str(post.get("photo_strategy", "")).strip()
+
+    if image_url and not attachments:
+        if photo_strategy == "community_message":
+            print("Uploading Tripster image through VK community messages-photo API...")
+            attachments.append(upload_message_photo(group_token, image_url))
+            post["photo_mode"] = "community_message_photo_on_wall"
+        elif user_token:
+            try:
+                print(f"Uploading native Tripster wall photo with {token_source}...")
+                attachments.append(upload_wall_photo(user_token, group_id, image_url))
+                post["photo_mode"] = "native_wall_photo"
+            except RuntimeError as exc:
+                if "another ip address" not in str(exc):
+                    raise
+                print("VK user token is IP-bound; falling back to community messages-photo API...")
+                attachments.append(upload_message_photo(group_token, image_url))
+                post["photo_mode"] = "community_message_photo_on_wall"
+        else:
+            print("No usable VK user token; using community messages-photo API...")
+            attachments.append(upload_message_photo(group_token, image_url))
+            post["photo_mode"] = "community_message_photo_on_wall"
 
     post_id = str(post.get("id") or uuid.uuid4().hex)
     guid = hashlib.sha256(post_id.encode("utf-8")).hexdigest()[:32]
