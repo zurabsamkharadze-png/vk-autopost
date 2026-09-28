@@ -1,19 +1,19 @@
-name: Fix VK Post 5 Photos
+name: Republish VK Post 5 With Photos
 
 on:
   workflow_dispatch:
 
 jobs:
-  fix:
+  publish:
     runs-on: ubuntu-latest
     steps:
-      - name: Attach native Tripster photos to VK post 5
+      - name: Publish corrected VK post with native Tripster photos
         env:
           VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
           VK_GROUP_ID: "241800139"
         run: |
           python - <<'PY'
-          import base64, json, os, urllib.parse, urllib.request
+          import base64, hashlib, json, os, urllib.parse, urllib.request
 
           API = "https://api.vk.com/method"
           VERSION = "5.199"
@@ -30,7 +30,7 @@ jobs:
           def vk(method, **params):
               payload = {**params, "access_token": token, "v": VERSION}
               data = urllib.parse.urlencode(payload, doseq=True).encode("utf-8")
-              req = urllib.request.Request(f"{API}/{method}", data=data, headers={"User-Agent":"geotrips-vk-autopost/fix-post-5"}, method="POST")
+              req = urllib.request.Request(f"{API}/{method}", data=data, headers={"User-Agent":"geotrips-vk-autopost/repost-with-photos"}, method="POST")
               with urllib.request.urlopen(req, timeout=60) as r:
                   body = json.loads(r.read().decode("utf-8"))
               if "error" in body:
@@ -38,6 +38,7 @@ jobs:
                   raise RuntimeError(f"VK API {method} failed: {e.get('error_code')} {e.get('error_msg')}")
               return body.get("response")
 
-          result = vk("wall.edit", owner_id=-group_id, post_id=5, message=text, attachments=attachments)
-          print("VK wall.edit result:", result)
+          guid = hashlib.sha256(b"colorful-georgia-native-3photos-2026-09-28-v2").hexdigest()[:32]
+          result = vk("wall.post", owner_id=-group_id, from_group=1, message=text, attachments=attachments, guid=guid)
+          print("Published corrected VK post:", result.get("post_id") if isinstance(result, dict) else result)
           PY
