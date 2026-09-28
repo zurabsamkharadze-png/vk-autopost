@@ -29,7 +29,7 @@
 <body>
 <main><div class="card">
   <h1>GeoTrips VK Helper</h1>
-  <p>Подготовка 3–4 нативных фото для пяти партнёрских туров Tripster.</p>
+  <p>Подготовка нативных фото Tripster для трёх популярных экскурсий по России.</p>
   <p class="muted">Используются уменьшенные фотографии Tripster (800×600 / 600×800), чтобы не повторялась ошибка <b>image_too_large</b>. Посты здесь НЕ публикуются.</p>
   <p id="status" class="muted">Инициализация VK…</p>
 
@@ -39,8 +39,8 @@
   <div class="grid" id="gallery"></div>
 
   <div class="actions">
-    <button id="uploadBtn" disabled>Загрузить 4 фото выбранного поста</button>
-    <button id="uploadAllBtn" disabled>Подготовить фото для всех 5 постов</button>
+    <button id="uploadBtn" disabled>Загрузить фото выбранного поста</button>
+    <button id="uploadAllBtn" disabled>Подготовить фото для всех 3 постов</button>
     <button id="copyBtn" class="secondary" disabled>Скопировать пакет</button>
   </div>
 
@@ -57,58 +57,27 @@ const UPLOAD_PROXY='https://eppyjmtowtkxcwwhvwzp.supabase.co/functions/v1/khashu
 
 const TOURS=[
   {
-    id:'tour-georgia-main-2026-09-28-0900',time:'09:00',
-    title:'Главное в Грузии за одно путешествие: горы, города, вино',
-    partner:'https://experience.tripster.ru/u/57ef571945/',
+    id:'ru-spb-main-sights-2026-09-28',time:'1',
+    title:'По главным местам Петербурга',
+    partner:'https://experience.tripster.ru/experience/54441/',
     images:[
-      'https://resize.tripster.ru/OmbDEsCZrTYbkZyVcRLNu7qzpzc=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/9ca13b0b-da4b-4351-8293-5a2948bed115.jpg',
-      'https://resize.tripster.ru/Mv0XcCZXuxDm0DCFT8U7yWlo2zk=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/a03654e4-400b-4310-91d5-9f78a48fbca3.jpg',
-      'https://resize.tripster.ru/wJ7M_C3vsJCtGjQIB0XNRhroM2I=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/7878da7d-9a76-41e6-9aa2-73c7b15dcaa1.jpg',
-      'https://resize.tripster.ru/L52B8Rnlvgu-vVF57i-IEW68yiE=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/6cbc73ea-b2ec-4e5c-b3d5-abb0c2af705d.jpg'
+      'https://resize.tripster.ru/PYycv8hpt22Tj1tNK_rGy4QRt7k%3D/fit-in/800x600/filters%3Ano_upscale%28%29/https%3A//cdn.tripster.ru/photos/cdcc4536-3e64-4c6f-9e09-d23288b4be66.jpg'
     ]
   },
   {
-    id:'tour-tbilisi-batumi-2026-09-28-1200',time:'12:00',
-    title:'Из Тбилиси в Батуми: 4 древних города, грузинская кухня и морской бриз',
-    partner:'https://experience.tripster.ru/u/86913e567d/',
+    id:'ru-dagestan-sulak-2026-09-28',time:'2',
+    title:'Сулакский каньон, Бархан и пещера Нохъо — на джипе за один день',
+    partner:'https://experience.tripster.ru/experience/40125/',
     images:[
-      'https://resize.tripster.ru/gRLdzDIxU3Aw51eXv-9V9BIO3i8=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/de104592-087a-4412-9cfe-8e8d21e2f8d0.jpg',
-      'https://resize.tripster.ru/lx0iDf4nIiz4Ghi-3q39IHqxVkQ=/fit-in/600x800/filters:no_upscale()/https://cdn.tripster.ru/photos/31c017e7-7213-4d04-81f9-deb38bc9cfec.jpg',
-      'https://resize.tripster.ru/QgLMIWn4aj7T_B8aab7Romq8wcs=/fit-in/600x800/filters:no_upscale()/https://cdn.tripster.ru/photos/9b387430-2c0d-477b-984e-1146b9f703fb.jpg',
-      'https://resize.tripster.ru/cj1d0k-BJ5idUEVDQ8JQzsBBwpM=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/480877ee-ae49-43c1-b4b8-e4ce3367b1cc.jpg'
+      'https://resize.tripster.ru/1XHxEpCzzm4pUNdBUch3_P1yV_o%3D/fit-in/800x600/filters%3Ano_upscale%28%29/https%3A//cdn.tripster.ru/photos/08693250-8333-41d3-85e5-195ec55bda20.jpg'
     ]
   },
   {
-    id:'tour-tbilisi-mtskheta-kakheti-road-2026-09-28-1500',time:'15:00',
-    title:'Тбилиси, Мцхета, Кахетия и главное на Военно-Грузинской дороге: обзорный тур с дегустацией',
-    partner:'https://experience.tripster.ru/u/5d06eacdde/',
+    id:'ru-kaliningrad-best-2026-09-28',time:'3',
+    title:'Калининград: самый смак за 3 часа (с дегустацией)',
+    partner:'https://experience.tripster.ru/experience/24667/',
     images:[
-      'https://resize.tripster.ru/I5Yrjs_y--QZXb33NGfl9tfJIdE=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/d45c25af-9858-4769-aba7-934360c4510d.jpg',
-      'https://resize.tripster.ru/J2Ha5Fp2RL0GjpfXGmEI3sYjtOQ=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/e87e5d12-4abe-4e76-8f2b-eff1e26281d2.jpg',
-      'https://resize.tripster.ru/gwTlSjSgBwXXrRA9tGfQr0DBcQk=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/09fba867-a245-4fa0-9174-9fadfe0aeb58.jpg',
-      'https://resize.tripster.ru/NCUy7WHwodgu_BSZAbb89YtpnB0=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/63ab1385-aa5d-4870-adc4-90325832d2a2.jpg'
-    ]
-  },
-  {
-    id:'tour-classic-georgia-2026-09-28-1800',time:'18:00',
-    title:'Классический тур в Грузию: контрастная архитектура, горы и многогранность вкусов',
-    partner:'https://experience.tripster.ru/u/df36d68706/',
-    images:[
-      'https://resize.tripster.ru/mcT6sBWc9FsR6igC-IBF5mX9PdI=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/360c6ca4-374e-42c0-9886-a5d380d880b0.jpg',
-      'https://resize.tripster.ru/TCyG3C8Km-EYEGwHKKxIBbPANtI=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/1c1638f7-1951-460e-92d5-00149994957c.jpg',
-      'https://resize.tripster.ru/i4Nn59ySlNXG1lxmZxyG118BLSI=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/dc8ec56d-0d43-439e-a14c-77a33f64ded9.jpg',
-      'https://resize.tripster.ru/ZLpPvwGahoFdqhl1uq8h__m8Zt0=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/936c21c4-3cf7-47ed-8fd0-bf3b919e8706.jpg'
-    ]
-  },
-  {
-    id:'tour-colorful-georgia-private-2026-09-28-2100',time:'21:00',
-    title:'Красочная Грузия индивидуально и с дегустацией: Тбилиси, Мцхета, Сигнахи, Боржоми и Казбеги',
-    partner:'https://experience.tripster.ru/u/ac7b45c90e/',
-    images:[
-      'https://resize.tripster.ru/8WSxQqRUnn3pVQk-Cl4LT6oBjEQ=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/efdbe6af-ca99-45d8-ba70-6984715bafcb.jpg',
-      'https://resize.tripster.ru/YBTYqJuazWXR1H9AT32wbgiXShg=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/a471e8e6-2c48-4918-b3ad-531968b694a7.jpg',
-      'https://resize.tripster.ru/HA13bavBl_OoOXzmpOAUeu-X_jM=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/a01d4616-adee-4ae1-b4b6-6c741be02c4e.jpg',
-      'https://resize.tripster.ru/ikLhKZVJN_C7eVDTespAOIzPQxo=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/0d8fdb22-038f-43be-b37e-c31c1b99eb55.jpg'
+      'https://resize.tripster.ru/LPmGC8oVP3BNwe14Iz5NtJbQdYY%3D/fit-in/800x600/filters%3Ano_upscale%28%29/https%3A//cdn.tripster.ru/photos/05674ebd-e8f5-4a11-9192-8a7ba66f276f.jpg'
     ]
   }
 ];
@@ -175,7 +144,7 @@ async function init(){
   try{
     if(!window.vkBridge)throw new Error('VK Bridge не загрузился');
     await vkBridge.send('VKWebAppInit');
-    statusEl.textContent='VK готов. Можно подготовить один тур или все 5 сразу.';
+    statusEl.textContent='VK готов. Можно подготовить одну экскурсию или все 3 сразу.';
     uploadBtn.disabled=false;
     uploadAllBtn.disabled=false;
   }catch(e){statusEl.textContent='Ошибка инициализации.';errorEl.textContent=errText(e);}
@@ -192,7 +161,7 @@ uploadBtn.addEventListener('click',async()=>{
       try{attachments.push(await uploadPhoto(token,t.images[i],i+1,t.images.length));}
       catch(e){failures.push(`Фото ${i+1}: ${errText(e)}`);}
     }
-    if(attachments.length<2)throw new Error('Удалось подготовить меньше двух фотографий. Пришли мне текст ошибок.');
+    if(attachments.length<1)throw new Error('Не удалось подготовить фотографию. Пришли мне текст ошибки.');
     lastPacket=JSON.stringify({id:t.id,time:t.time,title:t.title,partner:t.partner,attachments},null,2);
     resultEl.textContent=`Успех ✅ Подготовлено фото: ${attachments.length}\n\n${lastPacket}`;
     if(failures.length)warningEl.textContent='Некоторые фото пропущены:\n'+failures.join('\n')+'\n\nПост всё равно можно публиковать с '+attachments.length+' фото.';
@@ -207,7 +176,7 @@ uploadAllBtn.addEventListener('click',async()=>{
   uploadBtn.disabled=true;uploadAllBtn.disabled=true;tourSelect.disabled=true;copyBtn.disabled=true;resultEl.textContent='';warningEl.textContent='';errorEl.textContent='';lastPacket='';
   const packages=[];const allFailures=[];
   try{
-    step('Получаем одно разрешение photos у VK для всех 5 туров…');
+    step('Получаем одно разрешение photos у VK для всех 3 экскурсий…');
     const token=await getToken();
     for(let ti=0;ti<TOURS.length;ti++){
       const t=TOURS[ti];
@@ -222,10 +191,10 @@ uploadAllBtn.addEventListener('click',async()=>{
           failures.push(msg);allFailures.push(msg);
         }
       }
-      if(attachments.length>=2){
+      if(attachments.length>=1){
         packages.push({id:t.id,time:t.time,title:t.title,partner:t.partner,attachments});
       }else{
-        allFailures.push(`${t.time} — подготовлено меньше двух фото, тур пропущен.`);
+        allFailures.push(`${t.time} — фото не подготовлено, экскурсия пропущена.`);
       }
     }
     if(!packages.length)throw new Error('Не удалось подготовить фотографии ни для одного тура.');
