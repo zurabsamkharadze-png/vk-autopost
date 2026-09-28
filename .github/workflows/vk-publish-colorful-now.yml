@@ -13,28 +13,14 @@ jobs:
           VK_GROUP_ID: "241800139"
         run: |
           python - <<'PY'
-          import json, os, urllib.parse, urllib.request, uuid, hashlib
-
+          import base64, hashlib, json, os, urllib.parse, urllib.request, uuid
           API = "https://api.vk.com/method"
           VERSION = "5.199"
           token = os.environ["VK_ACCESS_TOKEN"].strip()
           group_id = int(os.environ["VK_GROUP_ID"])
           image_url = "https://resize.tripster.ru/8WSxQqRUnn3pVQk-Cl4LT6oBjEQ=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/efdbe6af-ca99-45d8-ba70-6984715bafcb.jpg"
-          text = """✨ Красочная Грузия индивидуально и с дегустацией: Тбилиси, Мцхета, Сигнахи, Боржоми и Казбеги 🇬🇪
-
-Пять дней, в которых собраны очень разные впечатления: исторический Тбилиси, древняя Мцхета, романтичный Сигнахи, Боржоми и высокогорный Казбеги.
-
-По программе вы увидите монастыри Давид-Гареджи и Бодбе, попробуете домашнее вино, сладости, хлеб и сыр, пройдёте по пещерному городу и подниметесь к Троицкой церкви на высоту около 2170 метров — на фоне Казбека.
-
-🚗 Индивидуальный формат
-🍷 Дегустации
-🏔 Казбеги
-🌿 Боржоми
-❤️ Тбилиси, Мцхета и Сигнахи
-
-👉 Подробная программа, даты и бронирование:
-https://experience.tripster.ru/u/ac7b45c90e/"""
-
+          text_b64 = "4pyoINCa0YDQsNGB0L7Rh9C90LDRjyDQk9GA0YPQt9C40Y8g0LjQvdC00LjQstC40LTRg9Cw0LvRjNC9INC4INC00LXQs9GD0YHRgtCw0YbQuNC10Lk6INCi0LHQuNC70LjRgdC4LCDQnNGG0YXQtdGC0LAsINCh0LjQs9C90LDRhdC4LCDQkdC+0YDQttC+0LzQuCDQuCDQmtCw0LfQsdC10LPQuCDwn4es8J+HqgoK0J/Rj9GC0Ywg0LTQvdC10LksINCyINC60L7RgtC+0YDRi9GFINGB0L7QsdGA0LDQvdGLINC+0YfQtdC90Ywg0YDQsNC30L3Ri9C1INCy0L/QtdGH0LDRgtC70LXQvdC40Y86INC40YHRgtC+0YDQuNGH0LXRgdC60LjQuSDQotCx0LjQu9C40YHQuCwg0LTRgNC10LLQvdGP0Y8g0JzRhtGF0LXRgtCwLCDRgNC+0LzQsNC90YLQuNGH0L3Ri9C5INCh0LjQs9C90LDRhdC4LCDQkdC+0YDQttC+0LzQuCDQuCDQstGL0YHQvtC60L7Qs9C+0YDQvdGL0Lkg0JrQsNC30LHQtdCz0LguCgrQn9C+INC/0YDQvtCz0YDQsNC80LzQtSDQstGLINGD0LLQuNC00LjRgtC1INC80L7QvdCw0YHRgtGL0YDQuCDQlNCw0LLQuNC0LdCT0LDRgNC10LTQttC4INC4INCR0L7QtNCx0LUsINC/0L7Qv9GA0L7QsdGD0LXRgtC1INC00L7QvNCw0YjQvdC10LUg0LLQuNC90L4sINGB0LvQsNC00L7RgdGC0LgsINGF0LvQtdCxINC4INGB0YvRgCwg0L/RgNC+0LnQtNGR0YLQtSDQv9C+INC/0LXRidC10YDQvdC+0LzRgyDQs9C+0YDQvtC00YMg0Lgg0L/QvtC00L3QuNC80LXRgtC10YHRjCDQuiDQotGA0L7QuNGG0LrQvtC5INGG0LXRgNC60LLQuCDQvdCwINCy0YvRgdC+0YLQviDQvtC60L7Qu9C+IDIxNzAg0LzQtdGC0YDQvtCyIOKAlCDQvdCwINGE0L7QvdC1INCa0LDQt9Cx0LXQutCwLgoK8J+alSDQmNC90LTQuNCy0LjQtNGD0LDQu9GM0L3Ri9C5INGE0L7RgNC80LDRggrwn423INCU0LXQs9GD0YHRgtCw0YbQuNC4CvCfj5Qg0JrQsNC30LHQtdCz0LggCvCfjL8g0JHQvtGA0LbQvtC80LggCuKdpO+4jyDQotCx0LjQu9C40YHQuCwg0JzRhtGF0LXRgtCwINC4INCh0LjQs9C90LDRhdC4Cgrwn5GJINCf0L7QtNGA0L7QsdC90LDRjyDQv9GA0L7Qs9GA0LDQvNC80LAsINC00LDRgtGLINC4INCx0YDQvtC90LjRgNC+0LLQsNC90LjQtToKaHR0cHM6Ly9leHBlcmllbmNlLnRyaXBzdGVyLnJ1L3UvYWM3YjQ1YzkwZS8="
+          text = base64.b64decode(text_b64).decode("utf-8")
           def vk(method, **params):
               payload = {**params, "access_token": token, "v": VERSION}
               data = urllib.parse.urlencode(payload, doseq=True).encode()
@@ -45,32 +31,23 @@ https://experience.tripster.ru/u/ac7b45c90e/"""
                   e = body["error"]
                   raise RuntimeError(f"VK API {method} failed: {e.get('error_code')} {e.get('error_msg')}")
               return body.get("response")
-
           img_req = urllib.request.Request(image_url, headers={"User-Agent":"Mozilla/5.0","Referer":"https://experience.tripster.ru/"})
           with urllib.request.urlopen(img_req, timeout=60) as r:
               img = r.read()
               content_type = r.headers.get_content_type() or "image/jpeg"
-
           server = vk("photos.getMessagesUploadServer")
           upload_url = server["upload_url"]
           field_name = "file1" if "bulk_upload" in urllib.parse.urlparse(upload_url).path else "photo"
           boundary = f"----GeoTripsVK{uuid.uuid4().hex}"
-          body = b"".join([
-              f"--{boundary}\r\n".encode(),
-              f'Content-Disposition: form-data; name="{field_name}"; filename="tripster.jpg"\r\nContent-Type: {content_type}\r\n\r\n'.encode(),
-              img,
-              f"\r\n--{boundary}--\r\n".encode(),
-          ])
+          body = b"".join([f"--{boundary}\r\n".encode(), f'Content-Disposition: form-data; name="{field_name}"; filename="tripster.jpg"\r\nContent-Type: {content_type}\r\n\r\n'.encode(), img, f"\r\n--{boundary}--\r\n".encode()])
           req = urllib.request.Request(upload_url, data=body, headers={"Content-Type":f"multipart/form-data; boundary={boundary}","Content-Length":str(len(body)),"User-Agent":"geotrips-vk-autopost/one-off"}, method="POST")
           with urllib.request.urlopen(req, timeout=90) as r:
               uploaded = json.loads(r.read().decode())
-
           saved = vk("photos.saveMessagesPhoto", photo=uploaded.get("photo"), server=uploaded.get("server"), hash=uploaded.get("hash"))
           photo = saved[0]
           attachment = f"photo{photo['owner_id']}_{photo['id']}"
           if photo.get("access_key"):
               attachment += f"_{photo['access_key']}"
-
           guid = hashlib.sha256(b"colorful-georgia-ac7b45c90e-2026-09-28").hexdigest()[:32]
           result = vk("wall.post", owner_id=-group_id, from_group=1, message=text, attachments=attachment, guid=guid)
           print("Published VK post:", result.get("post_id") if isinstance(result, dict) else result)
