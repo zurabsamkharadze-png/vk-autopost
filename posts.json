@@ -45,7 +45,7 @@
   },
   {
     "id": "tour-tbilisi-mtskheta-kakheti-road-2026-09-28-1500",
-    "status": "queued",
+    "status": "published",
     "publish_after": "2026-09-28T11:00:00+00:00",
     "partner_link": "https://experience.tripster.ru/u/5d06eacdde/",
     "source_url": "https://experience.tripster.ru/experience/116102/",
@@ -60,7 +60,9 @@
     "attachments": [
       "photo200004513212_457239065_90750e0a0f60a1a1f4",
       "photo200004513212_457239066_7fe456a1480c500a78"
-    ]
+    ],
+    "published_at": "2026-09-28T14:57:37.080515+00:00",
+    "vk_post_id": 9
   },
   {
     "id": "tour-classic-georgia-2026-09-28-1800",
