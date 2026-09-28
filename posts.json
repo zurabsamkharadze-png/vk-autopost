@@ -157,7 +157,7 @@
   },
   {
     "id": "ru-spb-main-sights-2026-09-28",
-    "status": "queued",
+    "status": "published",
     "publish_after": "2026-09-28T14:50:00+00:00",
     "partner_link": "https://experience.tripster.ru/experience/54441/",
     "source_url": "https://experience.tripster.ru/experience/54441/",
@@ -166,7 +166,9 @@
     "attachments": [
       "photo200004513212_457239074_c771bc18deee99ba6d"
     ],
-    "photo_mode": "native_wall_photo_uploaded_in_miniapp"
+    "photo_mode": "native_wall_photo_uploaded_in_miniapp",
+    "published_at": "2026-09-28T15:53:28.090759+00:00",
+    "vk_post_id": 11
   },
   {
     "id": "ru-dagestan-sulak-2026-09-28",
