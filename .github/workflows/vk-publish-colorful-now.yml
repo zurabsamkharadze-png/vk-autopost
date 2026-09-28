@@ -1,0 +1,77 @@
+name: Publish Colorful Georgia Now
+
+on:
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish VK post with Tripster photo
+        env:
+          VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
+          VK_GROUP_ID: "241800139"
+        run: |
+          python - <<'PY'
+          import json, os, urllib.parse, urllib.request, uuid, hashlib
+
+          API = "https://api.vk.com/method"
+          VERSION = "5.199"
+          token = os.environ["VK_ACCESS_TOKEN"].strip()
+          group_id = int(os.environ["VK_GROUP_ID"])
+          image_url = "https://resize.tripster.ru/8WSxQqRUnn3pVQk-Cl4LT6oBjEQ=/fit-in/800x600/filters:no_upscale()/https://cdn.tripster.ru/photos/efdbe6af-ca99-45d8-ba70-6984715bafcb.jpg"
+          text = """✨ Красочная Грузия индивидуально и с дегустацией: Тбилиси, Мцхета, Сигнахи, Боржоми и Казбеги 🇬🇪
+
+Пять дней, в которых собраны очень разные впечатления: исторический Тбилиси, древняя Мцхета, романтичный Сигнахи, Боржоми и высокогорный Казбеги.
+
+По программе вы увидите монастыри Давид-Гареджи и Бодбе, попробуете домашнее вино, сладости, хлеб и сыр, пройдёте по пещерному городу и подниметесь к Троицкой церкви на высоту около 2170 метров — на фоне Казбека.
+
+🚗 Индивидуальный формат
+🍷 Дегустации
+🏔 Казбеги
+🌿 Боржоми
+❤️ Тбилиси, Мцхета и Сигнахи
+
+👉 Подробная программа, даты и бронирование:
+https://experience.tripster.ru/u/ac7b45c90e/"""
+
+          def vk(method, **params):
+              payload = {**params, "access_token": token, "v": VERSION}
+              data = urllib.parse.urlencode(payload, doseq=True).encode()
+              req = urllib.request.Request(f"{API}/{method}", data=data, headers={"User-Agent":"geotrips-vk-autopost/one-off"}, method="POST")
+              with urllib.request.urlopen(req, timeout=60) as r:
+                  body = json.loads(r.read().decode())
+              if "error" in body:
+                  e = body["error"]
+                  raise RuntimeError(f"VK API {method} failed: {e.get('error_code')} {e.get('error_msg')}")
+              return body.get("response")
+
+          img_req = urllib.request.Request(image_url, headers={"User-Agent":"Mozilla/5.0","Referer":"https://experience.tripster.ru/"})
+          with urllib.request.urlopen(img_req, timeout=60) as r:
+              img = r.read()
+              content_type = r.headers.get_content_type() or "image/jpeg"
+
+          server = vk("photos.getMessagesUploadServer")
+          upload_url = server["upload_url"]
+          field_name = "file1" if "bulk_upload" in urllib.parse.urlparse(upload_url).path else "photo"
+          boundary = f"----GeoTripsVK{uuid.uuid4().hex}"
+          body = b"".join([
+              f"--{boundary}\r\n".encode(),
+              f'Content-Disposition: form-data; name="{field_name}"; filename="tripster.jpg"\r\nContent-Type: {content_type}\r\n\r\n'.encode(),
+              img,
+              f"\r\n--{boundary}--\r\n".encode(),
+          ])
+          req = urllib.request.Request(upload_url, data=body, headers={"Content-Type":f"multipart/form-data; boundary={boundary}","Content-Length":str(len(body)),"User-Agent":"geotrips-vk-autopost/one-off"}, method="POST")
+          with urllib.request.urlopen(req, timeout=90) as r:
+              uploaded = json.loads(r.read().decode())
+
+          saved = vk("photos.saveMessagesPhoto", photo=uploaded.get("photo"), server=uploaded.get("server"), hash=uploaded.get("hash"))
+          photo = saved[0]
+          attachment = f"photo{photo['owner_id']}_{photo['id']}"
+          if photo.get("access_key"):
+              attachment += f"_{photo['access_key']}"
+
+          guid = hashlib.sha256(b"colorful-georgia-ac7b45c90e-2026-09-28").hexdigest()[:32]
+          result = vk("wall.post", owner_id=-group_id, from_group=1, message=text, attachments=attachment, guid=guid)
+          print("Published VK post:", result.get("post_id") if isinstance(result, dict) else result)
+          PY
