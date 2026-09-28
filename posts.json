@@ -157,7 +157,7 @@
   },
   {
     "id": "ru-spb-main-sights-2026-09-28",
-    "status": "queued",
+    "status": "blocked_photo_auth",
     "publish_after": "2026-09-28T14:50:00+00:00",
     "partner_link": "https://experience.tripster.ru/experience/54441/",
     "source_url": "https://experience.tripster.ru/experience/54441/",
@@ -166,7 +166,7 @@
   },
   {
     "id": "ru-dagestan-sulak-2026-09-28",
-    "status": "queued",
+    "status": "blocked_photo_auth",
     "publish_after": "2026-09-28T14:51:00+00:00",
     "partner_link": "https://experience.tripster.ru/experience/40125/",
     "source_url": "https://experience.tripster.ru/experience/40125/",
@@ -175,7 +175,7 @@
   },
   {
     "id": "ru-kaliningrad-best-2026-09-28",
-    "status": "queued",
+    "status": "blocked_photo_auth",
     "publish_after": "2026-09-28T14:52:00+00:00",
     "partner_link": "https://experience.tripster.ru/experience/24667/",
     "source_url": "https://experience.tripster.ru/experience/24667/",
