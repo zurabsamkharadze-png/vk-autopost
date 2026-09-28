@@ -22,7 +22,7 @@
   },
   {
     "id": "tour-tbilisi-batumi-2026-09-28-1200",
-    "status": "queued",
+    "status": "published",
     "publish_after": "2026-09-28T08:00:00+00:00",
     "partner_link": "https://experience.tripster.ru/u/86913e567d/",
     "source_url": "https://experience.tripster.ru/experience/87905/",
@@ -39,7 +39,9 @@
       "photo200004513212_457239062_54b634bcde6f3de9f0",
       "photo200004513212_457239063_97069c483c9eb353c0",
       "photo200004513212_457239064_041ddc9693bb3895d0"
-    ]
+    ],
+    "published_at": "2026-09-28T14:56:51.603620+00:00",
+    "vk_post_id": 8
   },
   {
     "id": "tour-tbilisi-mtskheta-kakheti-road-2026-09-28-1500",
