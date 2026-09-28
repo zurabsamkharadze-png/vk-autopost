@@ -40,6 +40,7 @@
 
   <div class="actions">
     <button id="uploadBtn" disabled>Загрузить 4 фото выбранного поста</button>
+    <button id="uploadAllBtn" disabled>Подготовить фото для всех 5 постов</button>
     <button id="copyBtn" class="secondary" disabled>Скопировать пакет</button>
   </div>
 
@@ -116,6 +117,7 @@ const statusEl=document.getElementById('status');
 const tourSelect=document.getElementById('tourSelect');
 const tourInfo=document.getElementById('tourInfo');
 const uploadBtn=document.getElementById('uploadBtn');
+const uploadAllBtn=document.getElementById('uploadAllBtn');
 const copyBtn=document.getElementById('copyBtn');
 const stepsEl=document.getElementById('steps');
 const resultEl=document.getElementById('result');
@@ -173,8 +175,9 @@ async function init(){
   try{
     if(!window.vkBridge)throw new Error('VK Bridge не загрузился');
     await vkBridge.send('VKWebAppInit');
-    statusEl.textContent='VK готов. Выбери тур и загрузи его фотографии.';
+    statusEl.textContent='VK готов. Можно подготовить один тур или все 5 сразу.';
     uploadBtn.disabled=false;
+    uploadAllBtn.disabled=false;
   }catch(e){statusEl.textContent='Ошибка инициализации.';errorEl.textContent=errText(e);}
 }
 
@@ -198,6 +201,46 @@ uploadBtn.addEventListener('click',async()=>{
     copyBtn.disabled=false;
   }catch(e){statusEl.textContent='Загрузка остановлена.';errorEl.textContent='Ошибка: '+errText(e)+(failures.length?'\n'+failures.join('\n'):'');}
   finally{uploadBtn.disabled=false;tourSelect.disabled=false;}
+});
+
+uploadAllBtn.addEventListener('click',async()=>{
+  uploadBtn.disabled=true;uploadAllBtn.disabled=true;tourSelect.disabled=true;copyBtn.disabled=true;resultEl.textContent='';warningEl.textContent='';errorEl.textContent='';lastPacket='';
+  const packages=[];const allFailures=[];
+  try{
+    step('Получаем одно разрешение photos у VK для всех 5 туров…');
+    const token=await getToken();
+    for(let ti=0;ti<TOURS.length;ti++){
+      const t=TOURS[ti];
+      const attachments=[];const failures=[];
+      statusEl.textContent=`Тур ${ti+1}/${TOURS.length}: ${t.title}`;
+      for(let i=0;i<t.images.length;i++){
+        try{
+          step(`Тур ${ti+1}/${TOURS.length}, фото ${i+1}/${t.images.length}: загружаем в VK…`);
+          attachments.push(await uploadPhoto(token,t.images[i],i+1,t.images.length));
+        }catch(e){
+          const msg=`${t.time} — фото ${i+1}: ${errText(e)}`;
+          failures.push(msg);allFailures.push(msg);
+        }
+      }
+      if(attachments.length>=2){
+        packages.push({id:t.id,time:t.time,title:t.title,partner:t.partner,attachments});
+      }else{
+        allFailures.push(`${t.time} — подготовлено меньше двух фото, тур пропущен.`);
+      }
+    }
+    if(!packages.length)throw new Error('Не удалось подготовить фотографии ни для одного тура.');
+    lastPacket=JSON.stringify({type:'vk_tripster_batch',tours:packages},null,2);
+    resultEl.textContent=`Успех ✅ Подготовлено туров: ${packages.length}/${TOURS.length}\n\n${lastPacket}`;
+    if(allFailures.length)warningEl.textContent='Некоторые фотографии пропущены:\n'+allFailures.join('\n');
+    step('Готово. Все доступные фото подготовлены. Нажми «Скопировать пакет» один раз и пришли его мне.');
+    statusEl.textContent=`Готово: подготовлено ${packages.length} из ${TOURS.length} туров.`;
+    copyBtn.disabled=false;
+  }catch(e){
+    statusEl.textContent='Массовая загрузка остановлена.';
+    errorEl.textContent='Ошибка: '+errText(e)+(allFailures.length?'\n'+allFailures.join('\n'):'');
+  }finally{
+    uploadBtn.disabled=false;uploadAllBtn.disabled=false;tourSelect.disabled=false;
+  }
 });
 
 copyBtn.addEventListener('click',async()=>{
