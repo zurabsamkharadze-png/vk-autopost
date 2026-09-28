@@ -50,6 +50,31 @@
   <div id="error" class="err" style="margin-top:16px"></div>
 </div></main>
 <script>
+const OAUTH_PARAMS=new URLSearchParams(location.search);
+const IS_VK_OAUTH_CALLBACK=OAUTH_PARAMS.has('code')||OAUTH_PARAMS.has('error');
+if(IS_VK_OAUTH_CALLBACK){
+  const gateway='https://eppyjmtowtkxcwwhvwzp.supabase.co/functions/v1/khashuri-bundle-check-v14';
+  const main=document.querySelector('main');
+  main.innerHTML='<div class="card"><h1>GeoTrips VK</h1><p id="oauthStatus">Подключаем автоматическую загрузку фотографий…</p></div>';
+  const status=document.getElementById('oauthStatus');
+  (async()=>{
+    try{
+      const oauthError=OAUTH_PARAMS.get('error');
+      if(oauthError)throw new Error(oauthError+': '+(OAUTH_PARAMS.get('error_description')||''));
+      const code=OAUTH_PARAMS.get('code')||'';
+      const state=OAUTH_PARAMS.get('state')||'';
+      const device_id=OAUTH_PARAMS.get('device_id')||'';
+      if(!code||!state||!device_id)throw new Error('VK не вернул все параметры авторизации');
+      const r=await fetch(gateway,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'callback',code,state,device_id})});
+      const data=await r.json().catch(()=>null);
+      if(!r.ok||!data?.ok)throw new Error((data?.error||('HTTP '+r.status))+(data?.message?' — '+data.message:''));
+      status.innerHTML='<b>Готово ✅</b><br><br>Автоматическая загрузка фото в VK подключена. Эту страницу можно закрыть.';
+      history.replaceState({},'',location.pathname);
+    }catch(e){
+      status.innerHTML='<b>Ошибка подключения</b><br><br>'+String(e?.message||e);
+    }
+  })();
+}else{
 const APP_ID=54792536;
 const GROUP_ID=241800139;
 const API_VERSION='5.199';
@@ -253,5 +278,6 @@ copyBtn.addEventListener('click',async()=>{
 });
 
 init();
+}
 </script>
 </body></html>

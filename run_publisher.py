@@ -5,6 +5,7 @@ import mimetypes
 import os
 import subprocess
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
@@ -112,6 +113,32 @@ def multipart_upload(url: str, field_name: str, filename: str, content_type: str
         return json.loads(response.read().decode("utf-8"))
 
 
+def upload_wall_photo_via_gateway(gateway_url: str, gateway_key: str, image_url: str) -> str:
+    payload = json.dumps({"action": "upload", "image_url": image_url}).encode("utf-8")
+    req = urllib.request.Request(
+        gateway_url,
+        data=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {gateway_key}",
+            "User-Agent": "geotrips-vk-autopost/3.0",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=120) as response:
+            body = json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", "replace")
+        raise RuntimeError(f"VK photo gateway HTTP {exc.code}: {detail[:500]}") from exc
+    if not body.get("ok"):
+        raise RuntimeError(f"VK photo gateway failed: {body.get('error')} {body.get('message', '')}".strip())
+    attachment = str(body.get("attachment") or "").strip()
+    if not attachment.startswith("photo"):
+        raise RuntimeError("VK photo gateway did not return a native photo attachment")
+    return attachment
+
+
 def upload_wall_photo(user_token: str, group_id: int, image_url: str) -> str:
     server = vk_call("photos.getWallUploadServer", user_token, group_id=group_id)
     filename, content_type, content = download_image(image_url)
@@ -209,6 +236,8 @@ def main():
     group_token = os.getenv("VK_ACCESS_TOKEN", "").strip()
     legacy_user_token = os.getenv("VK_USER_TOKEN", "").strip()
     client_secret = os.getenv("VK_CLIENT_SECRET", "").strip()
+    gateway_url = os.getenv("VK_GATEWAY_URL", "").strip()
+    gateway_key = os.getenv("VK_GATEWAY_KEY", "").strip()
     raw_group_id = os.getenv("VK_GROUP_ID", "").strip()
 
     if not group_token:
@@ -241,7 +270,11 @@ def main():
     photo_strategy = str(post.get("photo_strategy", "")).strip()
 
     if image_url and not attachments:
-        if photo_strategy == "community_message":
+        if gateway_url and gateway_key:
+            print("Uploading native Tripster wall photo through the refresh-token gateway...")
+            attachments.append(upload_wall_photo_via_gateway(gateway_url, gateway_key, image_url))
+            post["photo_mode"] = "native_refresh_gateway"
+        elif photo_strategy == "community_message":
             print("Uploading Tripster image through VK community messages-photo API...")
             attachments.append(upload_message_photo(group_token, image_url))
             post["photo_mode"] = "community_message_photo_on_wall"
@@ -253,13 +286,9 @@ def main():
             except RuntimeError as exc:
                 if "another ip address" not in str(exc):
                     raise
-                print("VK user token is IP-bound; falling back to community messages-photo API...")
-                attachments.append(upload_message_photo(group_token, image_url))
-                post["photo_mode"] = "community_message_photo_on_wall"
+                raise RuntimeError("VK user token is IP-bound and the automatic gateway is not configured") from exc
         else:
-            print("No usable VK user token; using community messages-photo API...")
-            attachments.append(upload_message_photo(group_token, image_url))
-            post["photo_mode"] = "community_message_photo_on_wall"
+            raise RuntimeError("Tripster photo is required, but no native VK photo upload method is configured")
 
     post_id = str(post.get("id") or uuid.uuid4().hex)
     guid = hashlib.sha256(post_id.encode("utf-8")).hexdigest()[:32]
