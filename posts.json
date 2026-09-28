@@ -172,7 +172,7 @@
   },
   {
     "id": "ru-dagestan-sulak-2026-09-28",
-    "status": "queued",
+    "status": "published",
     "publish_after": "2026-09-28T14:51:00+00:00",
     "partner_link": "https://experience.tripster.ru/experience/40125/",
     "source_url": "https://experience.tripster.ru/experience/40125/",
@@ -181,7 +181,9 @@
     "attachments": [
       "photo200004513212_457239075_f4bfb0ce0fa345865d"
     ],
-    "photo_mode": "native_wall_photo_uploaded_in_miniapp"
+    "photo_mode": "native_wall_photo_uploaded_in_miniapp",
+    "published_at": "2026-09-28T15:54:01.041934+00:00",
+    "vk_post_id": 12
   },
   {
     "id": "ru-kaliningrad-best-2026-09-28",
