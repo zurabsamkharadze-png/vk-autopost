@@ -29,7 +29,7 @@
 <body>
 <main><div class="card">
   <h1>GeoTrips VK Helper</h1>
-  <p>Подготовка нативных фото Tripster для 5 постов по России.</p>
+  <p>Подготовка нативных фото Tripster для 3 постов по Турции.</p>
   <p class="muted">Используются уменьшенные фотографии Tripster (800×600 / 600×800), чтобы не повторялась ошибка <b>image_too_large</b>. Посты здесь НЕ публикуются.</p>
   <p id="status" class="muted">Инициализация VK…</p>
 
@@ -40,7 +40,7 @@
 
   <div class="actions">
     <button id="uploadBtn" disabled>Загрузить фото выбранного поста</button>
-    <button id="uploadAllBtn" disabled>Подготовить фото для всех 5 постов</button>
+    <button id="uploadAllBtn" disabled>Подготовить фото для всех 3 постов</button>
     <button id="copyBtn" class="secondary" disabled>Скопировать пакет</button>
   </div>
 
@@ -57,34 +57,22 @@ const UPLOAD_PROXY='https://eppyjmtowtkxcwwhvwzp.supabase.co/functions/v1/khashu
 
 const TOURS=[
   {
-    id:'ru-direction-dagestan-sulak-long-2026-09-28-b',time:'1',
-    title:'Дагестан и Сулакский каньон',
-    partner:'https://experience.tripster.ru/experience/38640/',
-    images:['https://resize.tripster.ru/cfSe79EIm21R7UlOrn5roEUkuck%3D/fit-in/800x600/filters%3Ano_upscale%28%29/https%3A//cdn.tripster.ru/photos/77656781-4b1a-4077-9bc4-0ab0a6de0f79.jpg']
+    id:'turkey-istanbul-first-trip-2026-09-28',time:'1',
+    title:'Стамбул — Старый город и Босфор',
+    partner:'https://experience.tripster.ru/experience/61947/',
+    images:['https://resize.tripster.ru/5-Zb81g6rfGSGHysszr6G_pG-uI%3D/fit-in/800x600/filters%3Ano_upscale%28%29/https%3A//cdn.tripster.ru/photos/353a1b90-06fb-406c-81a5-e4a627761e0d.jpg']
   },
   {
-    id:'ru-direction-murmansk-teriberka-long-2026-09-28-b',time:'2',
-    title:'Териберка и Баренцево море',
-    partner:'https://experience.tripster.ru/experience/44079/',
-    images:['https://resize.tripster.ru/7H4vV7y-WyrS83grxRjW0fQbxuY%3D/fit-in/600x800/filters%3Ano_upscale%28%29/https%3A//cdn.tripster.ru/photos/a6935445-3ef6-4922-b1e1-add77cb14465.jpg']
+    id:'turkey-cappadocia-top8-2026-09-28',time:'2',
+    title:'Каппадокия — ТОП-8 мест',
+    partner:'https://experience.tripster.ru/experience/53840/',
+    images:['https://resize.tripster.ru/-6kqvsCzQHJYOePjnPgIpvTIUnQ%3D/fit-in/800x600/filters%3Ano_upscale%28%29/https%3A//cdn.tripster.ru/photos/5c315f17-88be-4884-a867-edda2fb76726.jpg']
   },
   {
-    id:'ru-direction-nizhny-long-2026-09-28-b',time:'3',
-    title:'Нижний Новгород — кремль и исторический центр',
-    partner:'https://experience.tripster.ru/experience/43532/',
-    images:['https://resize.tripster.ru/M2uMfJ8JoPb7P_fb8kArH6QsrSA%3D/fit-in/800x600/filters%3Ano_upscale%28%29/https%3A//cdn.tripster.ru/photos/150f4802-2046-47e3-996c-b07d41f1f600.jpg']
-  },
-  {
-    id:'ru-direction-baikal-listvyanka-long-2026-09-28-b',time:'4',
-    title:'Байкал и Листвянка',
-    partner:'https://experience.tripster.ru/experience/34980/',
-    images:['https://resize.tripster.ru/gBnN7zUuDmE6qfBuhI7tn7wOuf8%3D/fit-in/800x600/filters%3Ano_upscale%28%29/https%3A//cdn.tripster.ru/photos/4b1a42a2-6d33-4e6d-8b7c-20f859e8dd41.jpg']
-  },
-  {
-    id:'ru-direction-vladivostok-russky-long-2026-09-28-b',time:'5',
-    title:'Владивосток и остров Русский',
-    partner:'https://experience.tripster.ru/experience/29706/',
-    images:['https://resize.tripster.ru/tiCVmyl95uVCB1uBYi8Hw1Uien8%3D/fit-in/800x600/filters%3Ano_upscale%28%29/https%3A//cdn.tripster.ru/photos/8eec93ea-935c-4804-94c5-df87470af5a5.jpg']
+    id:'turkey-antalya-kaleici-2026-09-28',time:'3',
+    title:'Анталья — Старый город Калеичи',
+    partner:'https://experience.tripster.ru/experience/46382/',
+    images:['https://resize.tripster.ru/h6K85hduGotfkPmQ3sITVTdpP_M%3D/fit-in/800x600/filters%3Ano_upscale%28%29/https%3A//cdn.tripster.ru/photos/37c1cc88-a0ef-4fde-af06-be7fe94c237b.jpg']
   }
 ];
 
@@ -150,7 +138,7 @@ async function init(){
   try{
     if(!window.vkBridge)throw new Error('VK Bridge не загрузился');
     await vkBridge.send('VKWebAppInit');
-    statusEl.textContent='VK готов. Можно подготовить одну экскурсию или все 5 сразу.';
+    statusEl.textContent='VK готов. Можно подготовить одну экскурсию или все 3 сразу.';
     uploadBtn.disabled=false;
     uploadAllBtn.disabled=false;
   }catch(e){statusEl.textContent='Ошибка инициализации.';errorEl.textContent=errText(e);}
@@ -182,7 +170,7 @@ uploadAllBtn.addEventListener('click',async()=>{
   uploadBtn.disabled=true;uploadAllBtn.disabled=true;tourSelect.disabled=true;copyBtn.disabled=true;resultEl.textContent='';warningEl.textContent='';errorEl.textContent='';lastPacket='';
   const packages=[];const allFailures=[];
   try{
-    step('Получаем одно разрешение photos у VK для всех 5 экскурсий…');
+    step('Получаем одно разрешение photos у VK для всех 3 экскурсий…');
     const token=await getToken();
     for(let ti=0;ti<TOURS.length;ti++){
       const t=TOURS[ti];
