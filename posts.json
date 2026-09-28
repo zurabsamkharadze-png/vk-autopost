@@ -66,7 +66,7 @@
   },
   {
     "id": "tour-classic-georgia-2026-09-28-1800",
-    "status": "queued",
+    "status": "published",
     "publish_after": "2026-09-28T14:00:00+00:00",
     "partner_link": "https://experience.tripster.ru/u/df36d68706/",
     "source_url": "https://experience.tripster.ru/experience/48182/",
@@ -82,7 +82,9 @@
       "photo200004513212_457239067_fe5cf10c73d3a1d62a",
       "photo200004513212_457239068_f6ed73d4a47c0b19cb",
       "photo200004513212_457239069_a9796bf50ce39bfcf8"
-    ]
+    ],
+    "published_at": "2026-09-28T14:58:07.111694+00:00",
+    "vk_post_id": 10
   },
   {
     "id": "tour-colorful-georgia-private-2026-09-28-2100",
