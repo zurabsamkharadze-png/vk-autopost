@@ -1,0 +1,43 @@
+name: Fix VK Post 5 Photos
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Attach native Tripster photos to VK post 5
+        env:
+          VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
+          VK_GROUP_ID: "241800139"
+        run: |
+          python - <<'PY'
+          import base64, json, os, urllib.parse, urllib.request
+
+          API = "https://api.vk.com/method"
+          VERSION = "5.199"
+          token = os.environ["VK_ACCESS_TOKEN"].strip()
+          group_id = int(os.environ["VK_GROUP_ID"])
+          text_b64 = "4pyoINCa0YDQsNGB0L7Rh9C90LDRjyDQk9GA0YPQt9C40Y8g0LjQvdC00LjQstC40LTRg9Cw0LvRjNC90L4g0Lgg0YEg0LTQtdCz0YPRgdGC0LDRhtC40LXQuTog0KLQsdC40LvQuNGB0LgsINCc0YbRhdC10YLQsCwg0KHQuNCz0L3QsNGF0LgsINCR0L7RgNC20L7QvNC4INC4INCa0LDQt9Cx0LXQs9C4IPCfh6zwn4eqCgrQn9GP0YLRjCDQtNC90LXQuSwg0LIg0LrQvtGC0L7RgNGL0YUg0YHQvtCx0YDQsNC90Ysg0L7Rh9C10L3RjCDRgNCw0LfQvdGL0LUg0LLQv9C10YfQsNGC0LvQtdC90LjRjzog0LjRgdGC0L7RgNC40YfQtdGB0LrQuNC5INCi0LHQuNC70LjRgdC4LCDQtNGA0LXQstC90Y/RjyDQnNGG0YXQtdGC0LAsINGA0L7QvNCw0L3RgtC40YfQvdGL0Lkg0KHQuNCz0L3QsNGF0LgsINCR0L7RgNC20L7QvNC4INC4INCy0YvRgdC+0LrQvtCz0L7RgNC90YvQuSDQmtCw0LfQsdC10LPQuC4KCtCf0L4g0L/RgNC+0LPRgNCw0LzQvNC1INCy0Ysg0YPQstC40LTQuNGC0LUg0LzQvtC90LDRgdGC0YvRgNC4INCU0LDQstC40LQt0JPQsNGA0LXQtNC20Lgg0Lgg0JHQvtC00LHQtSwg0L/QvtC/0YDQvtCx0YPQtdGC0LUg0LTQvtC80LDRiNC90LXQtSDQstC40L3Qviwg0YHQu9Cw0LTQvtGB0YLQuCwg0YXQu9C10LEg0Lgg0YHRi9GALCDQv9GA0L7QudC00ZHRgtC1INC/0L4g0L/QtdGJ0LXRgNC90L7QvNGDINCz0L7RgNC+0LTRgyDQuCDQv9C+0LTQvdC40LzQtdGC0LXRgdGMINC6INCi0YDQvtC40YbQutC+0Lkg0YbQtdGA0LrQstC4INC90LAg0LLRi9GB0L7RgtGDINC+0LrQvtC70L4gMjE3MCDQvNC10YLRgNC+0LIg4oCUINC90LAg0YTQvtC90LUg0JrQsNC30LHQtdC60LAuCgrwn5qXINCY0L3QtNC40LLQuNC00YPQsNC70YzQvdGL0Lkg0YTQvtGA0LzQsNGCCvCfjbcg0JTQtdCz0YPRgdGC0LDRhtC40LgK8J+PlCDQmtCw0LfQsdC10LPQuArwn4y/INCR0L7RgNC20L7QvNC4CuKdpO+4jyDQotCx0LjQu9C40YHQuCwg0JzRhtGF0LXRgtCwINC4INCh0LjQs9C90LDRhdC4Cgrwn5GJINCf0L7QtNGA0L7QsdC90LDRjyDQv9GA0L7Qs9GA0LDQvNC80LAsINC00LDRgtGLINC4INCx0YDQvtC90LjRgNC+0LLQsNC90LjQtToKaHR0cHM6Ly9leHBlcmllbmNlLnRyaXBzdGVyLnJ1L3UvYWM3YjQ1YzkwZS8="
+          text = base64.b64decode(text_b64).decode("utf-8")
+          attachments = ",".join([
+              "photo200004513212_457239041_66cff3c6daea40d4f7",
+              "photo200004513212_457239042_e90b5566f1862df69f",
+              "photo200004513212_457239043_7399d0f47a7d944fcb",
+          ])
+
+          def vk(method, **params):
+              payload = {**params, "access_token": token, "v": VERSION}
+              data = urllib.parse.urlencode(payload, doseq=True).encode("utf-8")
+              req = urllib.request.Request(f"{API}/{method}", data=data, headers={"User-Agent":"geotrips-vk-autopost/fix-post-5"}, method="POST")
+              with urllib.request.urlopen(req, timeout=60) as r:
+                  body = json.loads(r.read().decode("utf-8"))
+              if "error" in body:
+                  e = body["error"]
+                  raise RuntimeError(f"VK API {method} failed: {e.get('error_code')} {e.get('error_msg')}")
+              return body.get("response")
+
+          result = vk("wall.edit", owner_id=-group_id, post_id=5, message=text, attachments=attachments)
+          print("VK wall.edit result:", result)
+          PY
