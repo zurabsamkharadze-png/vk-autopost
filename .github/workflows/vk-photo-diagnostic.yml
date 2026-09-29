@@ -13,6 +13,23 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+      - name: Check VK token permissions
+        env:
+          VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
+          VK_API_VERSION: "5.199"
+        run: |
+          python - <<'PY'
+          import json, os, urllib.parse, urllib.request
+          body=urllib.parse.urlencode({'access_token':os.environ['VK_ACCESS_TOKEN'],'v':os.environ['VK_API_VERSION']}).encode()
+          req=urllib.request.Request('https://api.vk.com/method/groups.getTokenPermissions',data=body,method='POST')
+          with urllib.request.urlopen(req,timeout=30) as r:
+              data=json.loads(r.read().decode('utf-8'))
+          if 'error' in data:
+              e=data['error']; print('TOKEN_PERMISSION_ERROR=%s %s'%(e.get('error_code'),e.get('error_msg')))
+          else:
+              names=[p.get('name') for p in (data.get('response') or {}).get('permissions',[]) if isinstance(p,dict)]
+              print('TOKEN_PERMISSIONS='+','.join(names))
+          PY
       - name: Diagnose group-token image upload
         env:
           VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
