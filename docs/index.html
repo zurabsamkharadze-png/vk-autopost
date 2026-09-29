@@ -77,7 +77,7 @@ if(IS_VK_OAUTH_CALLBACK){
     }
   })();
 }else{
-const APP_ID=54796105;
+const APP_ID=Number(OAUTH_PARAMS.get('vk_app_id'))||54796105;
 const GROUP_ID=241800139;
 const API_VERSION='5.199';
 const UPLOAD_PROXY='https://eppyjmtowtkxcwwhvwzp.supabase.co/functions/v1/khashuri-bundle-check-v14';
