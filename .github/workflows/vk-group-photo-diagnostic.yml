@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Test community-token photo upload without posting
+      - name: Inspect community token permissions and photo upload
         env:
           VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
           VK_GROUP_ID: "241800139"
@@ -35,7 +35,7 @@ jobs:
               req = urllib.request.Request(
                   f"https://api.vk.com/method/{method}",
                   data=body,
-                  headers={"User-Agent": "geotrips-vk-photo-diagnostic/1.1"},
+                  headers={"User-Agent": "geotrips-vk-photo-diagnostic/1.2"},
                   method="POST",
               )
               with urllib.request.urlopen(req, timeout=45) as response:
@@ -60,14 +60,20 @@ jobs:
                   headers={
                       "Content-Type": f"multipart/form-data; boundary={boundary}",
                       "Content-Length": str(len(body)),
-                      "User-Agent": "geotrips-vk-photo-diagnostic/1.1",
+                      "User-Agent": "geotrips-vk-photo-diagnostic/1.2",
                   },
                   method="POST",
               )
               with urllib.request.urlopen(req, timeout=90) as response:
                   return json.loads(response.read().decode("utf-8"))
 
-          print("Step 1: find an existing user dialog that allows community messages")
+          print("Step 0: inspect current community-token permissions")
+          perms = vk("groups.getTokenPermissions")
+          print("TOKEN_PERMISSIONS=" + json.dumps(perms, ensure_ascii=False, sort_keys=True))
+          permission_names = {str(x.get("name")) for x in (perms.get("permissions") or []) if isinstance(x, dict)} if isinstance(perms, dict) else set()
+          print("Permission names:", ", ".join(sorted(permission_names)) or "none")
+
+          print("Step 1: find an existing user dialog")
           conversations = vk("messages.getConversations", count=50, filter="all")
           items = (conversations or {}).get("items") or []
           peer_id = None
@@ -78,23 +84,20 @@ jobs:
                   break
           print("Conversation count returned:", len(items))
           if not peer_id:
-              raise RuntimeError("No user dialog found. Send one message to the GeoTrips community once, then rerun this diagnostic.")
+              raise RuntimeError("No user dialog found")
           print("Using existing user dialog peer_id:", peer_id)
 
-          print("Step 2: request messages photo upload server with community token")
+          print("Step 2: request messages photo upload server")
           server = vk("photos.getMessagesUploadServer", peer_id=peer_id)
           upload_url = server["upload_url"]
           parsed = urllib.parse.urlparse(upload_url)
           print("Upload endpoint:", parsed.scheme + "://" + parsed.netloc + parsed.path)
 
           print("Step 3: download Tripster image")
-          image_req = urllib.request.Request(
-              image_url,
-              headers={"User-Agent": "Mozilla/5.0", "Referer": "https://experience.tripster.ru/"},
-          )
+          image_req = urllib.request.Request(image_url, headers={"User-Agent": "Mozilla/5.0", "Referer": "https://experience.tripster.ru/"})
           with urllib.request.urlopen(image_req, timeout=60) as response:
               image = response.read()
-              content_type = (response.headers.get_content_type() or "image/jpeg")
+              content_type = response.headers.get_content_type() or "image/jpeg"
           print("Image bytes:", len(image), "type:", content_type)
 
           print("Step 4: upload to VK")
@@ -104,15 +107,10 @@ jobs:
           if "photo" not in uploaded:
               if "files" in uploaded:
                   print("Bulk upload response file keys:", sorted((uploaded.get("files") or {}).keys()))
-              raise RuntimeError("VK upload response has no photo field; cannot call photos.saveMessagesPhoto")
+              raise RuntimeError("VK upload response has no photo field")
 
-          print("Step 5: save message photo with community token")
-          saved = vk(
-              "photos.saveMessagesPhoto",
-              photo=uploaded["photo"],
-              server=uploaded.get("server", ""),
-              hash=uploaded.get("hash", ""),
-          )
+          print("Step 5: save message photo")
+          saved = vk("photos.saveMessagesPhoto", photo=uploaded["photo"], server=uploaded.get("server", ""), hash=uploaded.get("hash", ""))
           if not saved:
               raise RuntimeError("photos.saveMessagesPhoto returned an empty result")
           photo = saved[0]
