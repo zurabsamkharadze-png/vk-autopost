@@ -1,4 +1,4 @@
-name: VK Document Image Diagnostic
+name: VK Production Image Uploader Test
 
 on:
   workflow_dispatch:
@@ -7,48 +7,24 @@ permissions:
   contents: read
 
 jobs:
-  test-doc-image:
+  self-test:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Verify image document on scheduled wall post
+      - uses: actions/checkout@v4
+      - name: Test production image uploader without publishing a post
         env:
           VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
-          VK_GROUP_ID: "241800139"
           VK_API_VERSION: "5.199"
         run: |
           python - <<'PY'
-          import json, os, time, urllib.parse, urllib.request
-          token=os.environ["VK_ACCESS_TOKEN"].strip(); group_id=int(os.environ["VK_GROUP_ID"]); v=os.environ.get("VK_API_VERSION","5.199")
-          attachment="doc-241800139_710000593"
-          def vk(method, **params):
-              payload={**params,"access_token":token,"v":v}
-              req=urllib.request.Request(f"https://api.vk.com/method/{method}",data=urllib.parse.urlencode(payload).encode(),headers={"User-Agent":"geotrips-vk-doc-wall-test/1.0"},method="POST")
-              with urllib.request.urlopen(req,timeout=45) as r: data=json.loads(r.read().decode())
-              if "error" in data:
-                  e=data["error"]; raise RuntimeError(f"{method}: [{e.get('error_code')}] {e.get('error_msg')}")
-              return data.get("response")
-          post_id=None
-          try:
-              result=vk("wall.post",owner_id=-group_id,from_group=1,message="GeoTrips diagnostic: image-document preview test; this scheduled item is deleted automatically.",attachments=attachment,publish_date=int(time.time())+86400)
-              post_id=int(result.get("post_id") if isinstance(result,dict) else result)
-              feed=vk("wall.get",owner_id=-group_id,filter="postponed",count=100)
-              target=next((x for x in ((feed or {}).get("items") or []) if int(x.get("id") or 0)==post_id),None)
-              if not target: raise RuntimeError("Scheduled post not found")
-              atts=target.get("attachments") or []
-              print("ATTACHMENT_TYPES=",[a.get("type") for a in atts])
-              doc=next(((a.get("doc") or {}) for a in atts if a.get("type")=="doc"),{})
-              preview=((doc.get("preview") or {}).get("photo") or {})
-              sizes=preview.get("sizes") or []
-              print("WALL_DOC_TITLE=",doc.get("title"))
-              print("WALL_DOC_TYPE=",doc.get("type"),"ext=",doc.get("ext"))
-              print("WALL_HAS_IMAGE_PREVIEW=",bool(preview),"sizes=",len(sizes))
-              if sizes:
-                  best=max(sizes,key=lambda s:int(s.get("width") or 0)*int(s.get("height") or 0))
-                  print("BEST_PREVIEW=",best.get("width"),"x",best.get("height"))
-              if not preview: raise RuntimeError("Wall document has no image preview")
-              print("SUCCESS: scheduled wall post contains visible image-document preview")
-          finally:
-              if post_id:
-                  print("DELETE_RESULT=",vk("wall.delete",owner_id=-group_id,post_id=post_id))
+          import os
+          from run_publisher import upload_wall_image_document
+          token=os.environ['VK_ACCESS_TOKEN'].strip()
+          image_url='https://resize.tripster.ru/5-Zb81g6rfGSGHysszr6G_pG-uI%3D/fit-in/800x600/filters%3Ano_upscale%28%29/https%3A//cdn.tripster.ru/photos/353a1b90-06fb-406c-81a5-e4a627761e0d.jpg'
+          attachment=upload_wall_image_document(token,241800139,image_url,'GeoTrips automatic photo test')
+          if not attachment.startswith('doc-241800139_'):
+              raise RuntimeError('Unexpected attachment returned: '+attachment)
+          print('SUCCESS_ATTACHMENT='+attachment)
+          print('No VK wall post was created by this test.')
           PY
