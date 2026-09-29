@@ -1,0 +1,36 @@
+name: VK Photo Capability Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Test community token for native wall photo upload
+        env:
+          VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
+        run: |
+          python - <<'PY'
+          import json, os, urllib.parse, urllib.request
+          token = os.environ['VK_ACCESS_TOKEN']
+          data = urllib.parse.urlencode({
+              'access_token': token,
+              'v': '5.199',
+              'group_id': '241800139',
+          }).encode()
+          req = urllib.request.Request('https://api.vk.com/method/photos.getWallUploadServer', data=data, method='POST')
+          with urllib.request.urlopen(req, timeout=30) as r:
+              body = json.loads(r.read().decode())
+          if 'error' in body:
+              e = body['error']
+              print('RESULT=ERROR')
+              print('ERROR_CODE=' + str(e.get('error_code')))
+              print('ERROR_MSG=' + str(e.get('error_msg')))
+              raise SystemExit(2)
+          resp = body.get('response') or {}
+          print('RESULT=SUCCESS')
+          print('HAS_UPLOAD_URL=' + str(bool(resp.get('upload_url'))))
+          print('HAS_ALBUM_ID=' + str('album_id' in resp))
+          PY
