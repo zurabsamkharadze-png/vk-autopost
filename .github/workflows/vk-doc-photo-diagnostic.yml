@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Upload Tripster image as VK document and test wall preview
+      - name: Retry Tripster image upload as VK document
         env:
           VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
           VK_GROUP_ID: "241800139"
@@ -20,6 +20,7 @@ jobs:
           python - <<'PY'
           import json
           import os
+          import time
           import urllib.parse
           import urllib.request
           import uuid
@@ -32,7 +33,7 @@ jobs:
           def vk(method, **params):
               payload = {**params, "access_token": token, "v": api_version}
               body = urllib.parse.urlencode(payload).encode("utf-8")
-              req = urllib.request.Request(f"https://api.vk.com/method/{method}", data=body, headers={"User-Agent":"geotrips-vk-doc-photo-diagnostic/1.1"}, method="POST")
+              req = urllib.request.Request(f"https://api.vk.com/method/{method}", data=body, headers={"User-Agent":"geotrips-vk-doc-photo-diagnostic/1.2"}, method="POST")
               with urllib.request.urlopen(req, timeout=45) as response:
                   data = json.loads(response.read().decode("utf-8"))
               if "error" in data:
@@ -40,38 +41,48 @@ jobs:
                   raise RuntimeError(f"{method}: [{err.get('error_code')}] {err.get('error_msg')}")
               return data.get("response")
 
-          def upload_file(url, filename, content_type, content):
+          def upload_file(url, content):
               boundary = "----GeoTripsVK" + uuid.uuid4().hex
               body = b"".join([
                   f"--{boundary}\r\n".encode(),
-                  f'Content-Disposition: form-data; name="file"; filename="{filename}"\r\n'.encode(),
-                  f"Content-Type: {content_type}\r\n\r\n".encode(),
+                  b'Content-Disposition: form-data; name="file"; filename="geotrips.jpg"\r\n',
+                  b"Content-Type: image/jpeg\r\n\r\n",
                   content,
                   f"\r\n--{boundary}--\r\n".encode(),
               ])
-              req = urllib.request.Request(url, data=body, headers={"Content-Type":f"multipart/form-data; boundary={boundary}","Content-Length":str(len(body)),"User-Agent":"geotrips-vk-doc-photo-diagnostic/1.1"}, method="POST")
+              req = urllib.request.Request(url, data=body, headers={"Content-Type":f"multipart/form-data; boundary={boundary}","Content-Length":str(len(body)),"User-Agent":"geotrips-vk-doc-photo-diagnostic/1.2"}, method="POST")
               with urllib.request.urlopen(req, timeout=90) as response:
                   return json.loads(response.read().decode("utf-8"))
 
-          print("Step 1: request VK wall document upload server with community token")
-          server = vk("docs.getWallUploadServer", group_id=group_id)
-          print("Upload server received:", bool(server and server.get("upload_url")))
-
-          print("Step 2: download Tripster image")
           image_req = urllib.request.Request(image_url, headers={"User-Agent":"Mozilla/5.0","Referer":"https://experience.tripster.ru/"})
           with urllib.request.urlopen(image_req, timeout=60) as response:
               image = response.read()
-              content_type = response.headers.get_content_type() or "image/jpeg"
-          print("Image bytes:", len(image), "type:", content_type)
+          print("Image bytes:", len(image))
 
-          print("Step 3: upload JPG to VK document server")
-          uploaded = upload_file(server["upload_url"], "geotrips-tripster-test.jpg", content_type, image)
-          print("UPLOAD_RESPONSE=" + json.dumps(uploaded, ensure_ascii=False, sort_keys=True))
-          file_token = uploaded.get("file")
-          if not file_token:
-              raise RuntimeError("VK document upload returned no file token")
+          uploaded = None
+          for attempt in range(1, 5):
+              server = vk("docs.getWallUploadServer", group_id=group_id)
+              upload_url = server["upload_url"]
+              parsed = urllib.parse.urlparse(upload_url)
+              print(f"Attempt {attempt} server:", parsed.netloc + parsed.path)
+              uploaded = upload_file(upload_url, image)
+              print(f"Attempt {attempt} response:", json.dumps(uploaded, ensure_ascii=False, sort_keys=True))
+              if uploaded.get("file"):
+                  break
+              time.sleep(2)
 
-          print("Step 4: save uploaded image as VK document")
-          saved = vk("docs.save", file=file_token, title="GeoTrips Tripster photo test")
+          if not uploaded or not uploaded.get("file"):
+              raise RuntimeError("All VK document upload attempts failed")
+
+          saved = vk("docs.save", file=uploaded["file"], title="GeoTrips photo")
           print("DOCS_SAVE_RESPONSE=" + json.dumps(saved, ensure_ascii=False, sort_keys=True))
+          doc = (saved or {}).get("doc") if isinstance(saved, dict) else None
+          if not doc:
+              raise RuntimeError("docs.save returned no doc")
+          attachment = f"doc{doc['owner_id']}_{doc['id']}"
+          if doc.get("access_key"):
+              attachment += "_" + str(doc["access_key"])
+          print("SUCCESS_DOC_ATTACHMENT=" + attachment)
+          preview = ((doc.get("preview") or {}).get("photo") or {})
+          print("DOC_HAS_PHOTO_PREVIEW=", bool(preview), "sizes=", len(preview.get("sizes") or []))
           PY
