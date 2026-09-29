@@ -63,9 +63,8 @@ if(IS_VK_OAUTH_CALLBACK){
       if(oauthError)throw new Error(oauthError+': '+(OAUTH_PARAMS.get('error_description')||''));
       const code=OAUTH_PARAMS.get('code')||'';
       const state=OAUTH_PARAMS.get('state')||'';
-      const device_id=OAUTH_PARAMS.get('device_id')||'';
-      if(!code||!state||!device_id)throw new Error('VK не вернул все параметры авторизации');
-      const r=await fetch(gateway,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'callback',code,state,device_id})});
+      if(!code||!state)throw new Error('VK не вернул все параметры авторизации');
+      const r=await fetch(gateway,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'legacy_callback',code,state})});
       const data=await r.json().catch(()=>null);
       if(!r.ok||!data?.ok)throw new Error((data?.error||('HTTP '+r.status))+(data?.message?' — '+data.message:''));
       status.innerHTML='<b>Готово ✅</b><br><br>Автоматическая загрузка фото в VK подключена. Эту страницу можно закрыть.';
