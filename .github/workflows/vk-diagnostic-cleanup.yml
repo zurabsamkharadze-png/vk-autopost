@@ -1,0 +1,29 @@
+name: VK Diagnostic Cleanup
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Move diagnostic scheduled post far into future
+        env:
+          VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
+          VK_GROUP_ID: "241800139"
+          VK_API_VERSION: "5.199"
+        run: |
+          python - <<'PY'
+          import json, os, urllib.parse, urllib.request
+          token=os.environ["VK_ACCESS_TOKEN"].strip(); group_id=int(os.environ["VK_GROUP_ID"]); v=os.environ.get("VK_API_VERSION","5.199")
+          payload={"owner_id":-group_id,"post_id":34,"message":"GeoTrips diagnostic placeholder — do not publish.","attachments":"doc-241800139_710000593","publish_date":2147483000,"access_token":token,"v":v}
+          req=urllib.request.Request("https://api.vk.com/method/wall.edit",data=urllib.parse.urlencode(payload).encode(),headers={"User-Agent":"geotrips-vk-cleanup/1.0"},method="POST")
+          with urllib.request.urlopen(req,timeout=45) as r: data=json.loads(r.read().decode())
+          print(json.dumps(data,ensure_ascii=False))
+          if "error" in data: raise RuntimeError(data["error"].get("error_msg","wall.edit failed"))
+          print("SUCCESS: diagnostic post 34 moved far into the future")
+          PY
