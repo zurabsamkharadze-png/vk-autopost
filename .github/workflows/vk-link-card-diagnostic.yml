@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Create hidden scheduled link card, inspect, then delete
+      - name: Create hidden scheduled direct-image link, inspect, then delete
         env:
           VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
           VK_GROUP_ID: "241800139"
@@ -27,7 +27,7 @@ jobs:
           token = os.environ["VK_ACCESS_TOKEN"].strip()
           group_id = int(os.environ["VK_GROUP_ID"])
           api_version = os.environ.get("VK_API_VERSION", "5.199")
-          partner_url = "https://experience.tripster.ru/experience/61947/"
+          image_url = "https://resize.tripster.ru/5-Zb81g6rfGSGHysszr6G_pG-uI%3D/fit-in/800x600/filters%3Ano_upscale%28%29/https%3A//cdn.tripster.ru/photos/353a1b90-06fb-406c-81a5-e4a627761e0d.jpg"
 
           def vk(method, **params):
               payload = {**params, "access_token": token, "v": api_version}
@@ -35,7 +35,7 @@ jobs:
               req = urllib.request.Request(
                   f"https://api.vk.com/method/{method}",
                   data=body,
-                  headers={"User-Agent": "geotrips-vk-link-card-diagnostic/1.0"},
+                  headers={"User-Agent": "geotrips-vk-link-card-diagnostic/1.1"},
                   method="POST",
               )
               with urllib.request.urlopen(req, timeout=45) as response:
@@ -47,13 +47,13 @@ jobs:
 
           post_id = None
           try:
-              print("Step 1: create a scheduled post for tomorrow with Tripster URL as attachment")
+              print("Step 1: create a scheduled post for tomorrow with direct Tripster image URL as attachment")
               result = vk(
                   "wall.post",
                   owner_id=-group_id,
                   from_group=1,
-                  message="GeoTrips diagnostic: scheduled link preview test (will be deleted automatically).",
-                  attachments=partner_url,
+                  message="GeoTrips diagnostic: direct Tripster image URL test (will be deleted automatically).\n\nhttps://experience.tripster.ru/experience/61947/",
+                  attachments=image_url,
                   publish_date=int(time.time()) + 86400,
               )
               post_id = int(result.get("post_id") if isinstance(result, dict) else result)
@@ -70,25 +70,19 @@ jobs:
               if not attachments:
                   raise RuntimeError("VK accepted the post but produced no attachment")
               for idx, attachment in enumerate(attachments, 1):
-                  if attachment.get("type") != "link":
-                      continue
-                  link = attachment.get("link") or {}
-                  photo = link.get("photo") or {}
-                  sizes = photo.get("sizes") or []
-                  print(f"Link {idx} title:", link.get("title"))
-                  print(f"Link {idx} caption:", link.get("caption"))
-                  print(f"Link {idx} has photo:", bool(photo))
-                  print(f"Link {idx} photo sizes:", len(sizes))
-                  if sizes:
-                      best = max(sizes, key=lambda s: int(s.get("width") or 0) * int(s.get("height") or 0))
-                      print("Preview size:", best.get("width"), "x", best.get("height"))
-              print("SUCCESS: scheduled Tripster link card created and inspected without user OAuth")
+                  if attachment.get("type") == "link":
+                      link = attachment.get("link") or {}
+                      photo = link.get("photo") or {}
+                      sizes = photo.get("sizes") or []
+                      print(f"Link {idx} url:", link.get("url"))
+                      print(f"Link {idx} has photo:", bool(photo))
+                      print(f"Link {idx} photo sizes:", len(sizes))
+                      if sizes:
+                          best = max(sizes, key=lambda s: int(s.get("width") or 0) * int(s.get("height") or 0))
+                          print("Preview size:", best.get("width"), "x", best.get("height"))
+              print("SUCCESS: direct-image link attachment created without user OAuth")
           finally:
               if post_id:
-                  try:
-                      deleted = vk("wall.delete", owner_id=-group_id, post_id=post_id)
-                      print("Cleanup wall.delete result:", deleted)
-                  except Exception as cleanup_error:
-                      print("CLEANUP_ERROR:", cleanup_error)
-                      raise
+                  deleted = vk("wall.delete", owner_id=-group_id, post_id=post_id)
+                  print("Cleanup wall.delete result:", deleted)
           PY
