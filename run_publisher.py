@@ -234,20 +234,12 @@ def normalized_group_id(raw: str) -> int:
 
 def main():
     group_token = os.getenv("VK_ACCESS_TOKEN", "").strip()
-    legacy_user_token = os.getenv("VK_USER_TOKEN", "").strip()
-    client_secret = os.getenv("VK_CLIENT_SECRET", "").strip()
-    gateway_url = os.getenv("VK_GATEWAY_URL", "").strip()
-    gateway_key = os.getenv("VK_GATEWAY_KEY", "").strip()
     raw_group_id = os.getenv("VK_GROUP_ID", "").strip()
 
     if not group_token:
         fail("VK_ACCESS_TOKEN secret is missing")
     if not raw_group_id:
         fail("VK_GROUP_ID is missing")
-
-    server_user_token = decrypt_server_user_token(client_secret)
-    user_token = server_user_token or legacy_user_token
-    token_source = "encrypted server token" if server_user_token else "VK_USER_TOKEN secret"
 
     group_id = normalized_group_id(raw_group_id)
     posts = load_queue()
@@ -270,25 +262,9 @@ def main():
     photo_strategy = str(post.get("photo_strategy", "")).strip()
 
     if image_url and not attachments:
-        if gateway_url and gateway_key:
-            print("Uploading native Tripster wall photo through the refresh-token gateway...")
-            attachments.append(upload_wall_photo_via_gateway(gateway_url, gateway_key, image_url))
-            post["photo_mode"] = "native_refresh_gateway"
-        elif photo_strategy == "community_message":
-            print("Uploading Tripster image through VK community messages-photo API...")
-            attachments.append(upload_message_photo(group_token, image_url))
-            post["photo_mode"] = "community_message_photo_on_wall"
-        elif user_token:
-            try:
-                print(f"Uploading native Tripster wall photo with {token_source}...")
-                attachments.append(upload_wall_photo(user_token, group_id, image_url))
-                post["photo_mode"] = "native_wall_photo"
-            except RuntimeError as exc:
-                if "another ip address" not in str(exc):
-                    raise
-                raise RuntimeError("VK user token is IP-bound and the automatic gateway is not configured") from exc
-        else:
-            raise RuntimeError("Tripster photo is required, but no native VK photo upload method is configured")
+        print("Uploading native Tripster photo with the VK community token...")
+        attachments.append(upload_message_photo(group_token, image_url))
+        post["photo_mode"] = "community_message_photo_on_wall"
 
     post_id = str(post.get("id") or uuid.uuid4().hex)
     guid = hashlib.sha256(post_id.encode("utf-8")).hexdigest()[:32]
