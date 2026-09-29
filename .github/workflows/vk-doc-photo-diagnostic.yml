@@ -20,7 +20,6 @@ jobs:
           python - <<'PY'
           import json
           import os
-          import time
           import urllib.parse
           import urllib.request
           import uuid
@@ -33,12 +32,7 @@ jobs:
           def vk(method, **params):
               payload = {**params, "access_token": token, "v": api_version}
               body = urllib.parse.urlencode(payload).encode("utf-8")
-              req = urllib.request.Request(
-                  f"https://api.vk.com/method/{method}",
-                  data=body,
-                  headers={"User-Agent": "geotrips-vk-doc-photo-diagnostic/1.0"},
-                  method="POST",
-              )
+              req = urllib.request.Request(f"https://api.vk.com/method/{method}", data=body, headers={"User-Agent":"geotrips-vk-doc-photo-diagnostic/1.1"}, method="POST")
               with urllib.request.urlopen(req, timeout=45) as response:
                   data = json.loads(response.read().decode("utf-8"))
               if "error" in data:
@@ -55,16 +49,7 @@ jobs:
                   content,
                   f"\r\n--{boundary}--\r\n".encode(),
               ])
-              req = urllib.request.Request(
-                  url,
-                  data=body,
-                  headers={
-                      "Content-Type": f"multipart/form-data; boundary={boundary}",
-                      "Content-Length": str(len(body)),
-                      "User-Agent": "geotrips-vk-doc-photo-diagnostic/1.0",
-                  },
-                  method="POST",
-              )
+              req = urllib.request.Request(url, data=body, headers={"Content-Type":f"multipart/form-data; boundary={boundary}","Content-Length":str(len(body)),"User-Agent":"geotrips-vk-doc-photo-diagnostic/1.1"}, method="POST")
               with urllib.request.urlopen(req, timeout=90) as response:
                   return json.loads(response.read().decode("utf-8"))
 
@@ -73,7 +58,7 @@ jobs:
           print("Upload server received:", bool(server and server.get("upload_url")))
 
           print("Step 2: download Tripster image")
-          image_req = urllib.request.Request(image_url, headers={"User-Agent": "Mozilla/5.0", "Referer": "https://experience.tripster.ru/"})
+          image_req = urllib.request.Request(image_url, headers={"User-Agent":"Mozilla/5.0","Referer":"https://experience.tripster.ru/"})
           with urllib.request.urlopen(image_req, timeout=60) as response:
               image = response.read()
               content_type = response.headers.get_content_type() or "image/jpeg"
@@ -81,63 +66,12 @@ jobs:
 
           print("Step 3: upload JPG to VK document server")
           uploaded = upload_file(server["upload_url"], "geotrips-tripster-test.jpg", content_type, image)
-          print("Upload response keys:", sorted(uploaded.keys()))
+          print("UPLOAD_RESPONSE=" + json.dumps(uploaded, ensure_ascii=False, sort_keys=True))
           file_token = uploaded.get("file")
           if not file_token:
               raise RuntimeError("VK document upload returned no file token")
 
           print("Step 4: save uploaded image as VK document")
           saved = vk("docs.save", file=file_token, title="GeoTrips Tripster photo test")
-          if not saved:
-              raise RuntimeError("docs.save returned empty result")
-          doc = saved.get("doc") if isinstance(saved, dict) else None
-          if not doc and isinstance(saved, dict):
-              doc = saved.get("graffiti")
-          if not doc:
-              raise RuntimeError("docs.save returned no doc object")
-          owner_id = int(doc.get("owner_id"))
-          doc_id = int(doc.get("id"))
-          attachment = f"doc{owner_id}_{doc_id}"
-          if doc.get("access_key"):
-              attachment += "_" + str(doc["access_key"])
-          print("DOC_ATTACHMENT=" + attachment)
-          print("Doc type:", doc.get("type"), "ext:", doc.get("ext"), "size:", doc.get("size"))
-          preview = doc.get("preview") or {}
-          photo_preview = preview.get("photo") or {}
-          sizes = photo_preview.get("sizes") or []
-          print("Doc has image preview:", bool(photo_preview), "preview sizes:", len(sizes))
-          if sizes:
-              best = max(sizes, key=lambda s: int(s.get("width") or 0) * int(s.get("height") or 0))
-              print("Best document preview:", best.get("width"), "x", best.get("height"))
-
-          print("Step 5: attach document to a hidden scheduled wall post")
-          post_id = None
-          try:
-              result = vk(
-                  "wall.post",
-                  owner_id=-group_id,
-                  from_group=1,
-                  message="GeoTrips diagnostic: VK document image preview test (will be deleted automatically).",
-                  attachments=attachment,
-                  publish_date=int(time.time()) + 86400,
-              )
-              post_id = int(result.get("post_id") if isinstance(result, dict) else result)
-              feed = vk("wall.get", owner_id=-group_id, filter="postponed", count=100)
-              items = (feed or {}).get("items") or []
-              target = next((x for x in items if int(x.get("id") or 0) == post_id), None)
-              if not target:
-                  raise RuntimeError("Scheduled diagnostic post not found")
-              atts = target.get("attachments") or []
-              print("Wall attachment types:", [a.get("type") for a in atts])
-              wall_doc = next(((a.get("doc") or {}) for a in atts if a.get("type") == "doc"), {})
-              wall_preview = ((wall_doc.get("preview") or {}).get("photo") or {})
-              wall_sizes = wall_preview.get("sizes") or []
-              print("Wall document has image preview:", bool(wall_preview), "sizes:", len(wall_sizes))
-              if not wall_preview:
-                  raise RuntimeError("Document attached, but VK returned no image preview")
-              print("SUCCESS: community token can create a visible image-document attachment for wall posts")
-          finally:
-              if post_id:
-                  deleted = vk("wall.delete", owner_id=-group_id, post_id=post_id)
-                  print("Cleanup wall.delete result:", deleted)
+          print("DOCS_SAVE_RESPONSE=" + json.dumps(saved, ensure_ascii=False, sort_keys=True))
           PY
