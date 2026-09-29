@@ -1,0 +1,28 @@
+name: VK Photo Token Diagnostic
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Test group token photo upload permission
+        shell: python
+        env:
+          VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
+        run: |
+          import json, os, urllib.parse, urllib.request
+          token = os.environ.get('VK_ACCESS_TOKEN','').strip()
+          if not token:
+              raise SystemExit('RESULT missing_token')
+          data = urllib.parse.urlencode({'group_id':'241800139','access_token':token,'v':'5.199'}).encode()
+          req = urllib.request.Request('https://api.vk.com/method/photos.getWallUploadServer', data=data, method='POST')
+          with urllib.request.urlopen(req, timeout=30) as r:
+              body = json.loads(r.read().decode('utf-8'))
+          if 'response' in body and body['response'].get('upload_url'):
+              print('RESULT group_token_can_upload_wall_photo')
+          else:
+              err = body.get('error') or {}
+              print('RESULT group_token_denied code=%s msg=%s' % (err.get('error_code'), err.get('error_msg')))
