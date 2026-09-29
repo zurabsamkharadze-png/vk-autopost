@@ -458,5 +458,13 @@
     ],
     "published_at": "2026-09-28T20:48:10.953831+00:00",
     "vk_post_id": 33
+  },
+  {
+    "id": "test-auto-photo-2026-09-29",
+    "status": "queued",
+    "publish_after": "2026-09-29T17:09:00+00:00",
+    "title": "GeoTrips — тест автоматической загрузки фото",
+    "image_url": "https://resize.tripster.ru/5-Zb81g6rfGSGHysszr6G_pG-uI%3D/fit-in/800x600/filters%3Ano_upscale%28%29/https%3A//cdn.tripster.ru/photos/353a1b90-06fb-406c-81a5-e4a627761e0d.jpg",
+    "text": "🧪 ТЕСТ GEOTrips\n\nПроверяем новую автоматическую загрузку фотографии в VK без ручной подготовки фото.\n\nЕсли у этой записи отображается фотография — автоматизация работает правильно. ✅\n\nРеклама. TRIPSGO PORTAL L.L.C, ИНН 9909760608"
   }
 ]
