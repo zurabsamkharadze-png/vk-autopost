@@ -1,0 +1,94 @@
+name: VK Link Card Diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-link-card:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Create hidden scheduled link card, inspect, then delete
+        env:
+          VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
+          VK_GROUP_ID: "241800139"
+          VK_API_VERSION: "5.199"
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import time
+          import urllib.parse
+          import urllib.request
+
+          token = os.environ["VK_ACCESS_TOKEN"].strip()
+          group_id = int(os.environ["VK_GROUP_ID"])
+          api_version = os.environ.get("VK_API_VERSION", "5.199")
+          partner_url = "https://experience.tripster.ru/experience/61947/"
+
+          def vk(method, **params):
+              payload = {**params, "access_token": token, "v": api_version}
+              body = urllib.parse.urlencode(payload).encode("utf-8")
+              req = urllib.request.Request(
+                  f"https://api.vk.com/method/{method}",
+                  data=body,
+                  headers={"User-Agent": "geotrips-vk-link-card-diagnostic/1.0"},
+                  method="POST",
+              )
+              with urllib.request.urlopen(req, timeout=45) as response:
+                  data = json.loads(response.read().decode("utf-8"))
+              if "error" in data:
+                  err = data["error"]
+                  raise RuntimeError(f"{method}: [{err.get('error_code')}] {err.get('error_msg')}")
+              return data.get("response")
+
+          post_id = None
+          try:
+              print("Step 1: create a scheduled post for tomorrow with Tripster URL as attachment")
+              result = vk(
+                  "wall.post",
+                  owner_id=-group_id,
+                  from_group=1,
+                  message="GeoTrips diagnostic: scheduled link preview test (will be deleted automatically).",
+                  attachments=partner_url,
+                  publish_date=int(time.time()) + 86400,
+              )
+              post_id = int(result.get("post_id") if isinstance(result, dict) else result)
+              print("Scheduled diagnostic post id:", post_id)
+
+              print("Step 2: inspect postponed posts")
+              feed = vk("wall.get", owner_id=-group_id, filter="postponed", count=100)
+              items = (feed or {}).get("items") or []
+              target = next((x for x in items if int(x.get("id") or 0) == post_id), None)
+              if not target:
+                  raise RuntimeError("Scheduled diagnostic post was not returned by wall.get(filter=postponed)")
+              attachments = target.get("attachments") or []
+              print("Attachment types:", [a.get("type") for a in attachments])
+              if not attachments:
+                  raise RuntimeError("VK accepted the post but produced no attachment")
+              for idx, attachment in enumerate(attachments, 1):
+                  if attachment.get("type") != "link":
+                      continue
+                  link = attachment.get("link") or {}
+                  photo = link.get("photo") or {}
+                  sizes = photo.get("sizes") or []
+                  print(f"Link {idx} title:", link.get("title"))
+                  print(f"Link {idx} caption:", link.get("caption"))
+                  print(f"Link {idx} has photo:", bool(photo))
+                  print(f"Link {idx} photo sizes:", len(sizes))
+                  if sizes:
+                      best = max(sizes, key=lambda s: int(s.get("width") or 0) * int(s.get("height") or 0))
+                      print("Preview size:", best.get("width"), "x", best.get("height"))
+              print("SUCCESS: scheduled Tripster link card created and inspected without user OAuth")
+          finally:
+              if post_id:
+                  try:
+                      deleted = vk("wall.delete", owner_id=-group_id, post_id=post_id)
+                      print("Cleanup wall.delete result:", deleted)
+                  except Exception as cleanup_error:
+                      print("CLEANUP_ERROR:", cleanup_error)
+                      raise
+          PY
