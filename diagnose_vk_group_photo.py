@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import json, mimetypes, os, sys, urllib.parse, urllib.request, uuid
+import json, mimetypes, os, urllib.parse, urllib.request, uuid
 
 VK_API_BASE = "https://api.vk.com/method"
 VK_API_VERSION = os.getenv("VK_API_VERSION", "5.199")
@@ -13,7 +13,7 @@ def vk_call(method, **params):
     req = urllib.request.Request(
         f"{VK_API_BASE}/{method}",
         data=urllib.parse.urlencode(payload).encode(),
-        headers={"User-Agent": "geotrips-vk-photo-diagnostic/1.0"},
+        headers={"User-Agent": "geotrips-vk-photo-diagnostic/1.1"},
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=45) as r:
@@ -45,36 +45,71 @@ def multipart_upload(url, field_name, filename, content_type, content):
     req = urllib.request.Request(url, data=body, headers={
         "Content-Type": f"multipart/form-data; boundary={boundary}",
         "Content-Length": str(len(body)),
-        "User-Agent": "geotrips-vk-photo-diagnostic/1.0",
+        "User-Agent": "geotrips-vk-photo-diagnostic/1.1",
     }, method="POST")
     with urllib.request.urlopen(req, timeout=90) as r:
         text = r.read().decode("utf-8")
     return json.loads(text)
 
 
-def main():
-    if not TOKEN:
-        raise RuntimeError("VK_ACCESS_TOKEN missing")
+def recent_message_peers():
+    response = vk_call("messages.getConversations", count=20, extended=0)
+    peers = []
+    for item in (response or {}).get("items", []):
+        conv = item.get("conversation", {}) if isinstance(item, dict) else {}
+        peer = conv.get("peer", {}) if isinstance(conv, dict) else {}
+        pid = peer.get("id")
+        ptype = peer.get("type")
+        try:
+            pid = int(pid)
+        except Exception:
+            continue
+        if ptype == "user" and pid > 0 and pid not in peers:
+            peers.append(pid)
+    return peers
+
+
+def manager_peers():
     managers = vk_call("groups.getMembers", group_id=GROUP_ID, filter="managers", fields="id")
-    items = managers.get("items", []) if isinstance(managers, dict) else []
-    ids = []
-    for item in items:
-        if isinstance(item, dict):
-            uid = item.get("id")
-        else:
-            uid = item
+    peers = []
+    for item in managers.get("items", []) if isinstance(managers, dict) else []:
+        uid = item.get("id") if isinstance(item, dict) else item
         try:
             uid = int(uid)
         except Exception:
             continue
-        if uid > 0:
-            ids.append(uid)
-    if not ids:
-        raise RuntimeError("No visible community manager user id found")
-    peer_id = ids[0]
-    print(f"MANAGER_FOUND={peer_id}")
+        if uid > 0 and uid not in peers:
+            peers.append(uid)
+    return peers
 
-    server = vk_call("photos.getMessagesUploadServer", peer_id=peer_id)
+
+def main():
+    if not TOKEN:
+        raise RuntimeError("VK_ACCESS_TOKEN missing")
+
+    recent = recent_message_peers()
+    print(f"RECENT_MESSAGE_PEERS={len(recent)}")
+    candidates = recent + [x for x in manager_peers() if x not in recent]
+    if not candidates:
+        print("RESULT=NO_PEER")
+        return 3
+
+    server = None
+    peer_id = None
+    failures = []
+    for candidate in candidates:
+        try:
+            server = vk_call("photos.getMessagesUploadServer", peer_id=candidate)
+            peer_id = candidate
+            break
+        except RuntimeError as exc:
+            failures.append(f"{candidate}:{exc}")
+    if not server or not peer_id:
+        print("PEER_FAILURES=" + " | ".join(failures[:5]))
+        print("RESULT=NO_ALLOWED_MESSAGE_PEER")
+        return 4
+
+    print(f"PEER_OK={peer_id}")
     upload_url = str(server.get("upload_url", ""))
     if not upload_url:
         raise RuntimeError("No upload_url returned")
