@@ -11,72 +11,44 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Retry Tripster image upload as VK document
+      - name: Verify image document on scheduled wall post
         env:
           VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
           VK_GROUP_ID: "241800139"
           VK_API_VERSION: "5.199"
         run: |
           python - <<'PY'
-          import json
-          import os
-          import time
-          import urllib.error
-          import urllib.parse
-          import urllib.request
-          import uuid
-
-          token = os.environ["VK_ACCESS_TOKEN"].strip()
-          group_id = int(os.environ["VK_GROUP_ID"])
-          api_version = os.environ.get("VK_API_VERSION", "5.199")
-          image_url = "https://resize.tripster.ru/5-Zb81g6rfGSGHysszr6G_pG-uI%3D/fit-in/800x600/filters%3Ano_upscale%28%29/https%3A//cdn.tripster.ru/photos/353a1b90-06fb-406c-81a5-e4a627761e0d.jpg"
-
+          import json, os, time, urllib.parse, urllib.request
+          token=os.environ["VK_ACCESS_TOKEN"].strip(); group_id=int(os.environ["VK_GROUP_ID"]); v=os.environ.get("VK_API_VERSION","5.199")
+          attachment="doc-241800139_710000593"
           def vk(method, **params):
-              payload = {**params, "access_token": token, "v": api_version}
-              req = urllib.request.Request(f"https://api.vk.com/method/{method}", data=urllib.parse.urlencode(payload).encode(), headers={"User-Agent":"geotrips-vk-doc-photo-diagnostic/1.3"}, method="POST")
-              with urllib.request.urlopen(req, timeout=45) as response:
-                  data = json.loads(response.read().decode())
+              payload={**params,"access_token":token,"v":v}
+              req=urllib.request.Request(f"https://api.vk.com/method/{method}",data=urllib.parse.urlencode(payload).encode(),headers={"User-Agent":"geotrips-vk-doc-wall-test/1.0"},method="POST")
+              with urllib.request.urlopen(req,timeout=45) as r: data=json.loads(r.read().decode())
               if "error" in data:
-                  err=data["error"]; raise RuntimeError(f"{method}: [{err.get('error_code')}] {err.get('error_msg')}")
+                  e=data["error"]; raise RuntimeError(f"{method}: [{e.get('error_code')}] {e.get('error_msg')}")
               return data.get("response")
-
-          def upload_file(url, content):
-              boundary="----GeoTripsVK"+uuid.uuid4().hex
-              body=b"".join([f"--{boundary}\r\n".encode(),b'Content-Disposition: form-data; name="file"; filename="geotrips.jpg"\r\n',b"Content-Type: image/jpeg\r\n\r\n",content,f"\r\n--{boundary}--\r\n".encode()])
-              req=urllib.request.Request(url,data=body,headers={"Content-Type":f"multipart/form-data; boundary={boundary}","Content-Length":str(len(body)),"User-Agent":"geotrips-vk-doc-photo-diagnostic/1.3"},method="POST")
-              try:
-                  with urllib.request.urlopen(req,timeout=45) as response:
-                      text=response.read().decode()
-                      try: return json.loads(text)
-                      except: return {"raw":text[:500]}
-              except urllib.error.HTTPError as e:
-                  text=e.read().decode("utf-8","replace")
-                  return {"http_error":e.code,"body":text[:500]}
-              except Exception as e:
-                  return {"exception":str(e)}
-
-          req=urllib.request.Request(image_url,headers={"User-Agent":"Mozilla/5.0","Referer":"https://experience.tripster.ru/"})
-          with urllib.request.urlopen(req,timeout=60) as r: image=r.read()
-          print("Image bytes:",len(image))
-
-          uploaded=None
-          for attempt in range(1,9):
-              server=vk("docs.getWallUploadServer",group_id=group_id)
-              u=server["upload_url"]; p=urllib.parse.urlparse(u)
-              print(f"Attempt {attempt} server:",p.netloc+p.path)
-              result=upload_file(u,image)
-              print(f"Attempt {attempt} response:",json.dumps(result,ensure_ascii=False,sort_keys=True))
-              if result.get("file"):
-                  uploaded=result; break
-              time.sleep(1)
-          if not uploaded: raise RuntimeError("All VK document upload attempts failed")
-
-          saved=vk("docs.save",file=uploaded["file"],title="GeoTrips photo")
-          print("DOCS_SAVE_RESPONSE="+json.dumps(saved,ensure_ascii=False,sort_keys=True))
-          doc=(saved or {}).get("doc") if isinstance(saved,dict) else None
-          if not doc: raise RuntimeError("docs.save returned no doc")
-          attachment=f"doc{doc['owner_id']}_{doc['id']}"+("_"+str(doc['access_key']) if doc.get("access_key") else "")
-          preview=((doc.get("preview") or {}).get("photo") or {})
-          print("SUCCESS_DOC_ATTACHMENT="+attachment)
-          print("DOC_HAS_PHOTO_PREVIEW=",bool(preview),"sizes=",len(preview.get("sizes") or []))
+          post_id=None
+          try:
+              result=vk("wall.post",owner_id=-group_id,from_group=1,message="GeoTrips diagnostic: image-document preview test; this scheduled item is deleted automatically.",attachments=attachment,publish_date=int(time.time())+86400)
+              post_id=int(result.get("post_id") if isinstance(result,dict) else result)
+              feed=vk("wall.get",owner_id=-group_id,filter="postponed",count=100)
+              target=next((x for x in ((feed or {}).get("items") or []) if int(x.get("id") or 0)==post_id),None)
+              if not target: raise RuntimeError("Scheduled post not found")
+              atts=target.get("attachments") or []
+              print("ATTACHMENT_TYPES=",[a.get("type") for a in atts])
+              doc=next(((a.get("doc") or {}) for a in atts if a.get("type")=="doc"),{})
+              preview=((doc.get("preview") or {}).get("photo") or {})
+              sizes=preview.get("sizes") or []
+              print("WALL_DOC_TITLE=",doc.get("title"))
+              print("WALL_DOC_TYPE=",doc.get("type"),"ext=",doc.get("ext"))
+              print("WALL_HAS_IMAGE_PREVIEW=",bool(preview),"sizes=",len(sizes))
+              if sizes:
+                  best=max(sizes,key=lambda s:int(s.get("width") or 0)*int(s.get("height") or 0))
+                  print("BEST_PREVIEW=",best.get("width"),"x",best.get("height"))
+              if not preview: raise RuntimeError("Wall document has no image preview")
+              print("SUCCESS: scheduled wall post contains visible image-document preview")
+          finally:
+              if post_id:
+                  print("DELETE_RESULT=",vk("wall.delete",owner_id=-group_id,post_id=post_id))
           PY
