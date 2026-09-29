@@ -35,7 +35,7 @@ jobs:
               req = urllib.request.Request(
                   f"https://api.vk.com/method/{method}",
                   data=body,
-                  headers={"User-Agent": "geotrips-vk-photo-diagnostic/1.0"},
+                  headers={"User-Agent": "geotrips-vk-photo-diagnostic/1.1"},
                   method="POST",
               )
               with urllib.request.urlopen(req, timeout=45) as response:
@@ -60,20 +60,34 @@ jobs:
                   headers={
                       "Content-Type": f"multipart/form-data; boundary={boundary}",
                       "Content-Length": str(len(body)),
-                      "User-Agent": "geotrips-vk-photo-diagnostic/1.0",
+                      "User-Agent": "geotrips-vk-photo-diagnostic/1.1",
                   },
                   method="POST",
               )
               with urllib.request.urlopen(req, timeout=90) as response:
                   return json.loads(response.read().decode("utf-8"))
 
-          print("Step 1: request messages photo upload server with community token")
-          server = vk("photos.getMessagesUploadServer", peer_id=-group_id)
+          print("Step 1: find an existing user dialog that allows community messages")
+          conversations = vk("messages.getConversations", count=50, filter="all")
+          items = (conversations or {}).get("items") or []
+          peer_id = None
+          for item in items:
+              peer = ((item.get("conversation") or {}).get("peer") or {})
+              if peer.get("type") == "user" and int(peer.get("id") or 0) > 0:
+                  peer_id = int(peer["id"])
+                  break
+          print("Conversation count returned:", len(items))
+          if not peer_id:
+              raise RuntimeError("No user dialog found. Send one message to the GeoTrips community once, then rerun this diagnostic.")
+          print("Using existing user dialog peer_id:", peer_id)
+
+          print("Step 2: request messages photo upload server with community token")
+          server = vk("photos.getMessagesUploadServer", peer_id=peer_id)
           upload_url = server["upload_url"]
           parsed = urllib.parse.urlparse(upload_url)
           print("Upload endpoint:", parsed.scheme + "://" + parsed.netloc + parsed.path)
 
-          print("Step 2: download Tripster image")
+          print("Step 3: download Tripster image")
           image_req = urllib.request.Request(
               image_url,
               headers={"User-Agent": "Mozilla/5.0", "Referer": "https://experience.tripster.ru/"},
@@ -83,7 +97,7 @@ jobs:
               content_type = (response.headers.get_content_type() or "image/jpeg")
           print("Image bytes:", len(image), "type:", content_type)
 
-          print("Step 3: upload to VK")
+          print("Step 4: upload to VK")
           field_name = "file1" if "bulk_upload" in parsed.path else "photo"
           uploaded = multipart_upload(upload_url, field_name, "tripster.jpg", content_type, image)
           print("Upload response keys:", sorted(uploaded.keys()))
@@ -92,7 +106,7 @@ jobs:
                   print("Bulk upload response file keys:", sorted((uploaded.get("files") or {}).keys()))
               raise RuntimeError("VK upload response has no photo field; cannot call photos.saveMessagesPhoto")
 
-          print("Step 4: save message photo with community token")
+          print("Step 5: save message photo with community token")
           saved = vk(
               "photos.saveMessagesPhoto",
               photo=uploaded["photo"],
@@ -107,5 +121,5 @@ jobs:
               attachment += "_" + photo["access_key"]
           print("SUCCESS: community token created reusable photo attachment")
           print("DIAGNOSTIC_ATTACHMENT=" + attachment)
-          print("No wall post was created by this diagnostic.")
+          print("No message and no wall post were created by this diagnostic.")
           PY
