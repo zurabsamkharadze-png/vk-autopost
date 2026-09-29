@@ -29,6 +29,8 @@
 <body>
 <main><div class="card">
   <h1>GeoTrips VK Helper</h1>
+  <p class="ok">Автозагрузка фото уже работает ✅</p>
+  <p class="muted"><b>VK ID, регистрация ИП и отдельное Web-приложение больше не нужны.</b> Основной автопостинг сам загружает изображение Tripster через токен сообщества. Эта страница остаётся только как резервный ручной способ.</p>
   <p>Подготовка нативных фото Tripster для 3 постов по Турции.</p>
   <p class="muted">Используются уменьшенные фотографии Tripster (800×600 / 600×800), чтобы не повторялась ошибка <b>image_too_large</b>. Посты здесь НЕ публикуются.</p>
   <p id="status" class="muted">Инициализация VK…</p>
@@ -42,7 +44,7 @@
     <button id="uploadBtn" disabled>Загрузить фото выбранного поста</button>
     <button id="uploadAllBtn" disabled>Подготовить фото для всех 3 постов</button>
     <button id="copyBtn" class="secondary" disabled>Скопировать пакет</button>
-    <button id="connectAutoBtn" class="secondary" disabled>Подключить автофото</button>
+    <button id="connectAutoBtn" class="secondary" style="display:none" disabled>Подключить автофото</button>
   </div>
 
   <div id="steps" class="steps">Ожидание…</div>
@@ -165,7 +167,7 @@ async function init(){
   try{
     if(!window.vkBridge)throw new Error('VK Bridge не загрузился');
     await vkBridge.send('VKWebAppInit');
-    statusEl.textContent='VK готов. Можно подготовить одну экскурсию или все 3 сразу.';
+    statusEl.textContent='Резервный ручной режим готов. Основная автозагрузка фото уже включена.';
     uploadBtn.disabled=false;
     uploadAllBtn.disabled=false;
     connectAutoBtn.disabled=false;
