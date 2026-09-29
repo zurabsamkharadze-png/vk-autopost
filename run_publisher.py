@@ -113,6 +113,68 @@ def multipart_upload(url: str, field_name: str, filename: str, content_type: str
         return json.loads(response.read().decode("utf-8"))
 
 
+
+def upload_wall_image_document(group_token: str, group_id: int, image_url: str, title: str = "GeoTrips photo") -> str:
+    """Upload an image as a VK image-document using only the community token.
+
+    VK group tokens cannot use photos.getWallUploadServer, but VK API 5.199
+    allows docs.getWallUploadServer/docs.save with group auth. Image documents
+    include a photo preview and can be attached to wall.post.
+    """
+    filename, content_type, content = download_image(image_url)
+    last_error = "unknown upload error"
+    uploaded = None
+
+    for attempt in range(1, 9):
+        server = vk_call("docs.getWallUploadServer", group_token, group_id=group_id)
+        upload_url = str((server or {}).get("upload_url") or "").strip()
+        if not upload_url:
+            last_error = "VK returned no document upload URL"
+            continue
+        try:
+            result = multipart_upload(upload_url, "file", filename, content_type, content)
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", "replace")
+            last_error = f"HTTP {exc.code}: {detail[:300]}"
+            print(f"VK document upload attempt {attempt} failed: {last_error}")
+            continue
+        except Exception as exc:
+            last_error = str(exc)
+            print(f"VK document upload attempt {attempt} failed: {last_error}")
+            continue
+
+        file_token = str((result or {}).get("file") or "").strip()
+        if file_token:
+            uploaded = result
+            print(f"VK document upload succeeded on attempt {attempt}.")
+            break
+
+        last_error = f"{(result or {}).get('error', 'no file token')}: {(result or {}).get('error_descr', '')}".strip()
+        print(f"VK document upload attempt {attempt} failed: {last_error}")
+
+    if not uploaded:
+        raise RuntimeError(f"Could not upload Tripster image to VK after retries: {last_error}")
+
+    saved = vk_call(
+        "docs.save",
+        group_token,
+        file=uploaded["file"],
+        title=title[:100] or "GeoTrips photo",
+    )
+    doc = saved.get("doc") if isinstance(saved, dict) else None
+    if not isinstance(doc, dict):
+        raise RuntimeError("VK docs.save did not return an image document")
+
+    preview = ((doc.get("preview") or {}).get("photo") or {})
+    sizes = preview.get("sizes") or []
+    if not sizes:
+        raise RuntimeError("VK saved the document but returned no image preview; post was not published")
+
+    attachment = f"doc{doc['owner_id']}_{doc['id']}"
+    if doc.get("access_key"):
+        attachment += f"_{doc['access_key']}"
+    return attachment
+
 def upload_wall_photo_via_gateway(gateway_url: str, gateway_key: str, image_url: str) -> str:
     payload = json.dumps({"action": "upload", "image_url": image_url}).encode("utf-8")
     req = urllib.request.Request(
@@ -259,12 +321,12 @@ def main():
             attachments.append(value)
 
     image_url = str(post.get("image_url", "")).strip()
-    photo_strategy = str(post.get("photo_strategy", "")).strip()
 
     if image_url and not attachments:
-        print("Uploading native Tripster photo with the VK community token...")
-        attachments.append(upload_message_photo(group_token, image_url))
-        post["photo_mode"] = "community_message_photo_on_wall"
+        print("Uploading Tripster image to VK automatically with the community token...")
+        doc_title = str(post.get("title") or "GeoTrips photo").strip()
+        attachments.append(upload_wall_image_document(group_token, group_id, image_url, doc_title))
+        post["photo_mode"] = "community_image_document_preview"
 
     post_id = str(post.get("id") or uuid.uuid4().hex)
     guid = hashlib.sha256(post_id.encode("utf-8")).hexdigest()[:32]
@@ -280,6 +342,8 @@ def main():
     )
 
     vk_post_id = result.get("post_id") if isinstance(result, dict) else result
+    if attachments:
+        post["attachments"] = attachments
     post["status"] = "published"
     post["published_at"] = datetime.now(timezone.utc).isoformat()
     post["vk_post_id"] = vk_post_id
