@@ -53,7 +53,7 @@
 const OAUTH_PARAMS=new URLSearchParams(location.search);
 const IS_VK_OAUTH_CALLBACK=OAUTH_PARAMS.has('code')||OAUTH_PARAMS.has('error');
 if(IS_VK_OAUTH_CALLBACK){
-  const gateway='https://eppyjmtowtkxcwwhvwzp.supabase.co/functions/v1/khashuri-bundle-check-v14';
+  const gateway='https://eppyjmtowtkxcwwhvwzp.supabase.co/functions/v1/geotrips-vk-auth-v2';
   const main=document.querySelector('main');
   main.innerHTML='<div class="card"><h1>GeoTrips VK</h1><p id="oauthStatus">Подключаем автоматическую загрузку фотографий…</p></div>';
   const status=document.getElementById('oauthStatus');
