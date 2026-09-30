@@ -1,0 +1,36 @@
+name: VK Community Photo Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-photo-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Test community-token photo upload without publishing
+        env:
+          VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
+          VK_API_VERSION: "5.199"
+        run: |
+          python - <<'PY'
+          import os
+          from run_publisher import upload_message_photo
+
+          image_url = "https://resize.tripster.ru/5-Zb81g6rfGSGHysszr6G_pG-uI%3D/fit-in/800x600/filters%3Ano_upscale%28%29/https%3A//cdn.tripster.ru/photos/353a1b90-06fb-406c-81a5-e4a627761e0d.jpg"
+          attachment = upload_message_photo(os.environ["VK_ACCESS_TOKEN"], image_url)
+          print(f"ATTACHMENT={attachment}")
+          if not attachment.startswith("photo"):
+              raise SystemExit("Expected native photo attachment")
+          PY
