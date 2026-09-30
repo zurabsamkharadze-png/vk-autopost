@@ -1,0 +1,53 @@
+name: VK Photo Token Diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Test community token photo permissions
+        env:
+          VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
+          VK_GROUP_ID: "241800139"
+        run: |
+          python - <<'PY'
+          import json, os, urllib.parse, urllib.request
+
+          token = os.environ.get('VK_ACCESS_TOKEN', '').strip()
+          group_id = os.environ.get('VK_GROUP_ID', '').strip()
+          if not token:
+              raise SystemExit('VK_ACCESS_TOKEN missing')
+
+          def call(method, **params):
+              payload = {**params, 'access_token': token, 'v': '5.199'}
+              req = urllib.request.Request(
+                  'https://api.vk.com/method/' + method,
+                  data=urllib.parse.urlencode(payload).encode('utf-8'),
+                  method='POST',
+                  headers={'User-Agent':'geotrips-vk-diagnostic/1.0'},
+              )
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  return json.loads(r.read().decode('utf-8'))
+
+          tests = [
+              ('photos.getWallUploadServer', {'group_id': group_id}),
+              ('photos.getMessagesUploadServer', {'group_id': group_id}),
+          ]
+          for method, params in tests:
+              data = call(method, **params)
+              if 'error' in data:
+                  e = data['error']
+                  print(f'{method}: ERROR code={e.get("error_code")} msg={e.get("error_msg")}')
+              else:
+                  resp = data.get('response')
+                  if isinstance(resp, dict) and resp.get('upload_url'):
+                      print(f'{method}: OK upload_url_received=yes')
+                  else:
+                      print(f'{method}: OK response_type={type(resp).__name__}')
+          PY
