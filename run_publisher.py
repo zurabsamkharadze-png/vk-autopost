@@ -223,13 +223,16 @@ def upload_wall_photo(user_token: str, group_id: int, image_url: str) -> str:
 
 
 def upload_message_photo(group_token: str, group_id: int, image_url: str) -> str:
-    """Upload a VK photo through the community messages-photo endpoint and reuse it on the wall."""
-    server = vk_call("photos.getMessagesUploadServer", group_token, group_id=group_id)
+    """Upload a VK photo with a community token through the messages-photo endpoint and reuse it on the wall.
+
+    VK API 5.199 allows group tokens for photos.getMessagesUploadServer/photos.saveMessagesPhoto.
+    Do not pass group_id to getMessagesUploadServer (it is not a supported parameter there), and always
+    upload the binary in the standard `photo` multipart field.
+    """
+    server = vk_call("photos.getMessagesUploadServer", group_token)
     upload_url = server["upload_url"]
-    path = urllib.parse.urlparse(upload_url).path
     filename, content_type, content = download_image(image_url)
-    field_name = "file1" if "bulk_upload" in path else "photo"
-    uploaded = multipart_upload(upload_url, field_name, filename, content_type, content)
+    uploaded = multipart_upload(upload_url, "photo", filename, content_type, content)
     photo_payload = uploaded.get("photo")
     if not photo_payload or str(photo_payload).strip() in ("", "[]", "{}", "None"):
         raise RuntimeError("VK message photo upload did not return a savable photo payload")
