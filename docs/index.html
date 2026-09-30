@@ -29,8 +29,8 @@
 <body>
 <main><div class="card">
   <h1>GeoTrips VK Helper</h1>
-  <p class="ok">Автозагрузка фото уже работает ✅</p>
-  <p class="muted"><b>VK ID, регистрация ИП и отдельное Web-приложение больше не нужны.</b> Основной автопостинг сам загружает изображение Tripster через токен сообщества. Эта страница остаётся только как резервный ручной способ.</p>
+  <p class="ok">Автопостинг с фото уже работает ✅</p>
+  <p class="muted"><b>Ничего дополнительно подключать не нужно.</b> Основной автопостинг загружает изображение Tripster через токен сообщества. Ошибка «access_token was given to another ip address» относится только к старому способу подключения и больше здесь не используется. Эта страница остаётся резервным ручным способом.</p>
   <p>Подготовка нативных фото Tripster для 3 постов по Турции.</p>
   <p class="muted">Используются уменьшенные фотографии Tripster (800×600 / 600×800), чтобы не повторялась ошибка <b>image_too_large</b>. Посты здесь НЕ публикуются.</p>
   <p id="status" class="muted">Инициализация VK…</p>
@@ -44,7 +44,6 @@
     <button id="uploadBtn" disabled>Загрузить фото выбранного поста</button>
     <button id="uploadAllBtn" disabled>Подготовить фото для всех 3 постов</button>
     <button id="copyBtn" class="secondary" disabled>Скопировать пакет</button>
-    <button id="connectAutoBtn" class="secondary" disabled>Подключить автофото</button>
   </div>
 
   <div id="steps" class="steps">Ожидание…</div>
@@ -54,34 +53,10 @@
 </div></main>
 <script>
 const OAUTH_PARAMS=new URLSearchParams(location.search);
-const IS_VK_OAUTH_CALLBACK=OAUTH_PARAMS.has('code')||OAUTH_PARAMS.has('error');
-if(IS_VK_OAUTH_CALLBACK){
-  const gateway='https://eppyjmtowtkxcwwhvwzp.supabase.co/functions/v1/geotrips-vk-auth-v2';
-  const main=document.querySelector('main');
-  main.innerHTML='<div class="card"><h1>GeoTrips VK</h1><p id="oauthStatus">Подключаем автоматическую загрузку фотографий…</p></div>';
-  const status=document.getElementById('oauthStatus');
-  (async()=>{
-    try{
-      const oauthError=OAUTH_PARAMS.get('error');
-      if(oauthError)throw new Error(oauthError+': '+(OAUTH_PARAMS.get('error_description')||''));
-      const code=OAUTH_PARAMS.get('code')||'';
-      const state=OAUTH_PARAMS.get('state')||'';
-      if(!code||!state)throw new Error('VK не вернул все параметры авторизации');
-      const r=await fetch(gateway,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'legacy_callback',code,state})});
-      const data=await r.json().catch(()=>null);
-      if(!r.ok||!data?.ok)throw new Error((data?.error||('HTTP '+r.status))+(data?.message?' — '+data.message:''));
-      status.innerHTML='<b>Готово ✅</b><br><br>Автоматическая загрузка фото в VK подключена. Эту страницу можно закрыть.';
-      history.replaceState({},'',location.pathname);
-    }catch(e){
-      status.innerHTML='<b>Ошибка подключения</b><br><br>'+String(e?.message||e);
-    }
-  })();
-}else{
 const APP_ID=Number(OAUTH_PARAMS.get('vk_app_id'))||54796105;
 const GROUP_ID=241800139;
 const API_VERSION='5.199';
 const UPLOAD_PROXY='https://eppyjmtowtkxcwwhvwzp.supabase.co/functions/v1/khashuri-bundle-check-v14';
-const REGISTER_ENDPOINT='https://eppyjmtowtkxcwwhvwzp.supabase.co/functions/v1/geotrips-vk-bridge-register';
 
 const TOURS=[
   {
@@ -110,7 +85,6 @@ const tourInfo=document.getElementById('tourInfo');
 const uploadBtn=document.getElementById('uploadBtn');
 const uploadAllBtn=document.getElementById('uploadAllBtn');
 const copyBtn=document.getElementById('copyBtn');
-const connectAutoBtn=document.getElementById('connectAutoBtn');
 const stepsEl=document.getElementById('steps');
 const resultEl=document.getElementById('result');
 const warningEl=document.getElementById('warning');
@@ -170,27 +144,8 @@ async function init(){
     statusEl.textContent='Резервный ручной режим готов. Основная автозагрузка фото уже включена.';
     uploadBtn.disabled=false;
     uploadAllBtn.disabled=false;
-    connectAutoBtn.disabled=false;
   }catch(e){statusEl.textContent='Ошибка инициализации.';errorEl.textContent=errText(e);}
 }
-
-connectAutoBtn.addEventListener('click',async()=>{
-  connectAutoBtn.disabled=true;errorEl.textContent='';warningEl.textContent='';resultEl.textContent='';
-  try{
-    step('Получаем разрешение photos у VK…');
-    const token=await getToken();
-    step('Сохраняем разрешение для автоматической загрузки…');
-    const r=await fetch(REGISTER_ENDPOINT,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'register_bridge_token',access_token:token})});
-    const data=await r.json().catch(()=>null);
-    if(!r.ok||!data?.ok)throw new Error((data?.error||('HTTP '+r.status))+(data?.message?' — '+data.message:''));
-    statusEl.textContent='Автоматическая загрузка фото подключена ✅';
-    resultEl.textContent='Готово ✅ Теперь новые фото Tripster можно загружать в VK автоматически без копирования photo-ID.';
-    step('Подключение завершено. Эту кнопку больше нажимать не нужно.');
-  }catch(e){
-    errorEl.textContent='Ошибка подключения: '+errText(e);
-    step('Подключение не завершено.');
-  }finally{connectAutoBtn.disabled=false;}
-});
 
 uploadBtn.addEventListener('click',async()=>{
   uploadBtn.disabled=true;tourSelect.disabled=true;copyBtn.disabled=true;resultEl.textContent='';warningEl.textContent='';errorEl.textContent='';lastPacket='';
@@ -301,6 +256,5 @@ copyBtn.addEventListener('click',async()=>{
 });
 
 init();
-}
 </script>
 </body></html>
