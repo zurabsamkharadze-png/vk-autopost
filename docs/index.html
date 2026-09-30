@@ -41,7 +41,7 @@
   <div class="grid" id="gallery"></div>
 
   <div class="actions">
-    <button id="connectBtn" disabled>Подключить автоматическую загрузку фото</button>
+    <button id="connectBtn" disabled style="background:#2e7d32">Автоматическая загрузка уже включена ✅</button>
     <button id="uploadBtn" disabled>Загрузить фото выбранного поста</button>
     <button id="uploadAllBtn" disabled>Подготовить фото для всех 3 постов</button>
     <button id="copyBtn" class="secondary" disabled>Скопировать пакет</button>
@@ -144,8 +144,8 @@ async function init(){
   try{
     if(!window.vkBridge)throw new Error('VK Bridge не загрузился');
     await vkBridge.send('VKWebAppInit');
-    statusEl.textContent='Мини-приложение готово. Сначала нажми «Подключить автоматическую загрузку фото».';
-    connectBtn.disabled=false;
+    statusEl.textContent='Автоматическая загрузка фото уже включена ✅ Ничего подключать не нужно. Этот экран нужен только как резервный ручной режим.';
+    connectBtn.disabled=true;
     uploadBtn.disabled=false;
     uploadAllBtn.disabled=false;
   }catch(e){statusEl.textContent='Ошибка инициализации.';errorEl.textContent=errText(e);}
