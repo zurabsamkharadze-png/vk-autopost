@@ -1,0 +1,21 @@
+name: VK Photo Upload Test
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test-photo-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Test VK community-token photo upload without wall post
+        env:
+          VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
+          VK_API_VERSION: "5.199"
+        run: python test_vk_photo_upload.py
