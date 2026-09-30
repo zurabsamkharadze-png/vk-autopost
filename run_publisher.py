@@ -323,21 +323,16 @@ def main():
     image_url = str(post.get("image_url", "")).strip()
 
     if image_url:
-        invalid = [a for a in attachments if not (a.startswith("photo") or a.startswith("doc"))]
+        invalid = [a for a in attachments if not a.startswith("photo")]
         if invalid:
-            fail(f"Queued post {post.get('id')} contains an unsupported VK attachment; refusing to publish: {invalid}")
+            fail(f"Queued post {post.get('id')} contains a non-photo VK attachment; refusing to publish: {invalid}")
         if not attachments:
-            print("Uploading Tripster image as a VK image document with the community token...")
-            attachment = upload_wall_image_document(
-                group_token,
-                group_id,
-                image_url,
-                title=str(post.get("title") or post.get("id") or "GeoTrips photo"),
-            )
-            if not attachment.startswith("doc"):
-                fail("VK document upload returned an unexpected attachment; refusing to publish")
+            print("Uploading Tripster image as a native VK photo with the community token...")
+            attachment = upload_message_photo(group_token, group_id, image_url)
+            if not attachment.startswith("photo"):
+                fail("VK community photo upload returned a non-photo attachment; refusing to publish")
             attachments.append(attachment)
-            post["photo_mode"] = "community_token_image_document"
+            post["photo_mode"] = "community_token_native_photo"
 
     post_id = str(post.get("id") or uuid.uuid4().hex)
     guid = hashlib.sha256(post_id.encode("utf-8")).hexdigest()[:32]
