@@ -41,7 +41,7 @@
   <div class="grid" id="gallery"></div>
 
   <div class="actions">
-    <button id="connectBtn" disabled style="background:#2e7d32">Автоматическая загрузка уже включена ✅</button>
+    <button id="connectBtn" disabled style="background:#2e7d32">Подключить автозагрузку фото</button>
     <button id="uploadBtn" disabled>Загрузить фото выбранного поста</button>
     <button id="uploadAllBtn" disabled>Подготовить фото для всех 3 постов</button>
     <button id="copyBtn" class="secondary" disabled>Скопировать пакет</button>
@@ -119,7 +119,7 @@ async function api(method,token,params={}){
   return r?.response;
 }
 async function getToken(){
-  const auth=await vkBridge.send('VKWebAppGetAuthToken',{app_id:APP_ID,scope:'photos'});
+  const auth=await vkBridge.send('VKWebAppGetAuthToken',{app_id:APP_ID,scope:'photos,groups'});
   if(!auth?.access_token)throw new Error('VK не вернул пользовательский токен');
   return auth.access_token;
 }
@@ -144,8 +144,8 @@ async function init(){
   try{
     if(!window.vkBridge)throw new Error('VK Bridge не загрузился');
     await vkBridge.send('VKWebAppInit');
-    statusEl.textContent='Автоматическая загрузка фото уже включена ✅ Ничего подключать не нужно. Этот экран нужен только как резервный ручной режим.';
-    connectBtn.disabled=true;
+    statusEl.textContent='Нажмите «Подключить автозагрузку фото» один раз. После этого GeoTrips сможет загружать фотографии Tripster в VK автоматически.';
+    connectBtn.disabled=false;
     uploadBtn.disabled=false;
     uploadAllBtn.disabled=false;
   }catch(e){statusEl.textContent='Ошибка инициализации.';errorEl.textContent=errText(e);}
