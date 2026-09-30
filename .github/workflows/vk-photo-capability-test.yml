@@ -11,42 +11,51 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Test photos.getWallUploadServer with community token
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Test available VK user tokens for wall photo upload
         env:
-          VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
+          VK_USER_TOKEN: ${{ secrets.VK_USER_TOKEN }}
+          VK_CLIENT_SECRET: ${{ secrets.VK_CLIENT_SECRET }}
           VK_GROUP_ID: "241800139"
         run: |
           python - <<'PY'
-          import json, os, urllib.parse, urllib.request
+          import os
+          import run_publisher as rp
 
-          token = os.environ.get("VK_ACCESS_TOKEN", "").strip()
-          group_id = os.environ.get("VK_GROUP_ID", "").strip()
-          if not token:
-              raise SystemExit("VK_ACCESS_TOKEN is missing")
+          group_id = int(os.environ["VK_GROUP_ID"])
+          tests = []
 
-          payload = urllib.parse.urlencode({
-              "access_token": token,
-              "v": "5.199",
-              "group_id": group_id,
-          }).encode()
-          req = urllib.request.Request(
-              "https://api.vk.com/method/photos.getWallUploadServer",
-              data=payload,
-              method="POST",
-              headers={"User-Agent": "GeoTrips-VK-Test/1.0"},
-          )
-          with urllib.request.urlopen(req, timeout=30) as resp:
-              data = json.loads(resp.read().decode("utf-8"))
+          legacy = os.environ.get("VK_USER_TOKEN", "").strip()
+          if legacy:
+              tests.append(("legacy_secret", legacy))
 
-          if "error" in data:
-              err = data["error"]
-              print(f"VK_ERROR code={err.get('error_code')} msg={err.get('error_msg')}")
+          client_secret = os.environ.get("VK_CLIENT_SECRET", "").strip()
+          try:
+              encrypted = rp.decrypt_server_user_token(client_secret)
+          except BaseException as exc:
+              encrypted = ""
+              print(f"encrypted_file: decrypt_failed {type(exc).__name__}")
+          if encrypted:
+              tests.append(("encrypted_file", encrypted))
+
+          if not tests:
+              raise SystemExit("No VK user token source is available")
+
+          any_ok = False
+          for label, token in tests:
+              try:
+                  result = rp.vk_call("photos.getWallUploadServer", token, group_id=group_id)
+                  if isinstance(result, dict) and result.get("upload_url"):
+                      print(f"{label}: VK_OK")
+                      any_ok = True
+                  else:
+                      print(f"{label}: VK_UNEXPECTED")
+              except Exception as exc:
+                  msg = str(exc).replace(token, "***")
+                  print(f"{label}: VK_ERROR {msg[:500]}")
+
+          if not any_ok:
               raise SystemExit(2)
-
-          result = data.get("response") or {}
-          if result.get("upload_url"):
-              print("VK_OK community token can obtain wall upload server")
-          else:
-              print("VK_UNEXPECTED no upload_url in response")
-              raise SystemExit(3)
           PY
