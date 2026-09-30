@@ -7,117 +7,41 @@ permissions:
   contents: read
 
 jobs:
-  test-photo-upload:
+  diagnose:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Inspect community token permissions and photo upload
+      - name: Test photos.getWallUploadServer with community token
         env:
           VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
           VK_GROUP_ID: "241800139"
           VK_API_VERSION: "5.199"
         run: |
           python - <<'PY'
-          import json
-          import os
-          import urllib.parse
-          import urllib.request
-          import uuid
+          import json, os, urllib.parse, urllib.request
 
-          token = os.environ["VK_ACCESS_TOKEN"].strip()
-          group_id = int(os.environ["VK_GROUP_ID"])
-          api_version = os.environ.get("VK_API_VERSION", "5.199")
-          image_url = "https://resize.tripster.ru/5-Zb81g6rfGSGHysszr6G_pG-uI%3D/fit-in/800x600/filters%3Ano_upscale%28%29/https%3A//cdn.tripster.ru/photos/353a1b90-06fb-406c-81a5-e4a627761e0d.jpg"
+          token = os.environ.get("VK_ACCESS_TOKEN", "").strip()
+          if not token:
+              raise SystemExit("RESULT=missing_group_token")
 
-          def vk(method, **params):
-              payload = {**params, "access_token": token, "v": api_version}
-              body = urllib.parse.urlencode(payload).encode("utf-8")
-              req = urllib.request.Request(
-                  f"https://api.vk.com/method/{method}",
-                  data=body,
-                  headers={"User-Agent": "geotrips-vk-photo-diagnostic/1.2"},
-                  method="POST",
-              )
-              with urllib.request.urlopen(req, timeout=45) as response:
-                  data = json.loads(response.read().decode("utf-8"))
-              if "error" in data:
-                  err = data["error"]
-                  raise RuntimeError(f"{method}: [{err.get('error_code')}] {err.get('error_msg')}")
-              return data.get("response")
+          payload = urllib.parse.urlencode({
+              "group_id": os.environ["VK_GROUP_ID"],
+              "access_token": token,
+              "v": os.environ["VK_API_VERSION"],
+          }).encode()
+          req = urllib.request.Request(
+              "https://api.vk.com/method/photos.getWallUploadServer",
+              data=payload,
+              method="POST",
+              headers={"User-Agent": "GeoTrips-VK-Diagnostic/1.0"},
+          )
+          with urllib.request.urlopen(req, timeout=30) as r:
+              data = json.loads(r.read().decode("utf-8"))
 
-          def multipart_upload(url, field_name, filename, content_type, content):
-              boundary = "----GeoTripsVK" + uuid.uuid4().hex
-              body = b"".join([
-                  f"--{boundary}\r\n".encode(),
-                  f'Content-Disposition: form-data; name="{field_name}"; filename="{filename}"\r\n'.encode(),
-                  f"Content-Type: {content_type}\r\n\r\n".encode(),
-                  content,
-                  f"\r\n--{boundary}--\r\n".encode(),
-              ])
-              req = urllib.request.Request(
-                  url,
-                  data=body,
-                  headers={
-                      "Content-Type": f"multipart/form-data; boundary={boundary}",
-                      "Content-Length": str(len(body)),
-                      "User-Agent": "geotrips-vk-photo-diagnostic/1.2",
-                  },
-                  method="POST",
-              )
-              with urllib.request.urlopen(req, timeout=90) as response:
-                  return json.loads(response.read().decode("utf-8"))
-
-          print("Step 0: inspect current community-token permissions")
-          perms = vk("groups.getTokenPermissions")
-          print("TOKEN_PERMISSIONS=" + json.dumps(perms, ensure_ascii=False, sort_keys=True))
-          permission_names = {str(x.get("name")) for x in (perms.get("permissions") or []) if isinstance(x, dict)} if isinstance(perms, dict) else set()
-          print("Permission names:", ", ".join(sorted(permission_names)) or "none")
-
-          print("Step 1: find an existing user dialog")
-          conversations = vk("messages.getConversations", count=50, filter="all")
-          items = (conversations or {}).get("items") or []
-          peer_id = None
-          for item in items:
-              peer = ((item.get("conversation") or {}).get("peer") or {})
-              if peer.get("type") == "user" and int(peer.get("id") or 0) > 0:
-                  peer_id = int(peer["id"])
-                  break
-          print("Conversation count returned:", len(items))
-          if not peer_id:
-              raise RuntimeError("No user dialog found")
-          print("Using existing user dialog peer_id:", peer_id)
-
-          print("Step 2: request messages photo upload server")
-          server = vk("photos.getMessagesUploadServer", peer_id=peer_id)
-          upload_url = server["upload_url"]
-          parsed = urllib.parse.urlparse(upload_url)
-          print("Upload endpoint:", parsed.scheme + "://" + parsed.netloc + parsed.path)
-
-          print("Step 3: download Tripster image")
-          image_req = urllib.request.Request(image_url, headers={"User-Agent": "Mozilla/5.0", "Referer": "https://experience.tripster.ru/"})
-          with urllib.request.urlopen(image_req, timeout=60) as response:
-              image = response.read()
-              content_type = response.headers.get_content_type() or "image/jpeg"
-          print("Image bytes:", len(image), "type:", content_type)
-
-          print("Step 4: upload to VK")
-          field_name = "file1" if "bulk_upload" in parsed.path else "photo"
-          uploaded = multipart_upload(upload_url, field_name, "tripster.jpg", content_type, image)
-          print("Upload response keys:", sorted(uploaded.keys()))
-          if "photo" not in uploaded:
-              if "files" in uploaded:
-                  print("Bulk upload response file keys:", sorted((uploaded.get("files") or {}).keys()))
-              raise RuntimeError("VK upload response has no photo field")
-
-          print("Step 5: save message photo")
-          saved = vk("photos.saveMessagesPhoto", photo=uploaded["photo"], server=uploaded.get("server", ""), hash=uploaded.get("hash", ""))
-          if not saved:
-              raise RuntimeError("photos.saveMessagesPhoto returned an empty result")
-          photo = saved[0]
-          attachment = f"photo{photo['owner_id']}_{photo['id']}"
-          if photo.get("access_key"):
-              attachment += "_" + photo["access_key"]
-          print("SUCCESS: community token created reusable photo attachment")
-          print("DIAGNOSTIC_ATTACHMENT=" + attachment)
-          print("No message and no wall post were created by this diagnostic.")
+          if "error" in data:
+              e = data["error"]
+              print(f"RESULT=error code={e.get('error_code')} msg={e.get('error_msg')}")
+          else:
+              response = data.get("response") or {}
+              print("RESULT=success upload_url_present=" + str(bool(response.get("upload_url"))).lower())
           PY
