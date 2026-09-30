@@ -1,0 +1,29 @@
+name: VK Message Photo Diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Upload one Tripster image through community messages API only
+        env:
+          VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
+        run: |
+          python - <<'PY'
+          import os
+          import run_publisher
+          url='https://resize.tripster.ru/5-Zb81g6rfGSGHysszr6G_pG-uI%3D/fit-in/800x600/filters%3Ano_upscale%28%29/https%3A//cdn.tripster.ru/photos/353a1b90-06fb-406c-81a5-e4a627761e0d.jpg'
+          token=os.environ.get('VK_ACCESS_TOKEN','').strip()
+          try:
+              attachment=run_publisher.upload_message_photo(token,241800139,url)
+              print('RESULT=success attachment='+attachment)
+          except Exception as e:
+              print('RESULT=error '+str(e))
+          PY
