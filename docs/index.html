@@ -29,8 +29,8 @@
 <body>
 <main><div class="card">
   <h1>GeoTrips VK Helper</h1>
-  <p class="ok">Автопостинг с фото уже работает ✅</p>
-  <p class="muted"><b>Ничего дополнительно подключать не нужно.</b> Основной автопостинг загружает изображение Tripster через токен сообщества. Ошибка «access_token was given to another ip address» относится только к старому способу подключения и больше здесь не используется. Эта страница остаётся резервным ручным способом.</p>
+  <p class="ok">GeoTrips Photo Helper</p>
+  <p class="muted"><b>Регистрация ИП и кабинет VK ID Business не нужны.</b> Для автозагрузки фото достаточно один раз дать этому мини-приложению доступ к фотографиям VK. Токен проверяется сервером и сохраняется в зашифрованном виде.</p>
   <p>Подготовка нативных фото Tripster для 3 постов по Турции.</p>
   <p class="muted">Используются уменьшенные фотографии Tripster (800×600 / 600×800), чтобы не повторялась ошибка <b>image_too_large</b>. Посты здесь НЕ публикуются.</p>
   <p id="status" class="muted">Инициализация VK…</p>
@@ -41,6 +41,7 @@
   <div class="grid" id="gallery"></div>
 
   <div class="actions">
+    <button id="connectBtn" disabled>Подключить автоматическую загрузку фото</button>
     <button id="uploadBtn" disabled>Загрузить фото выбранного поста</button>
     <button id="uploadAllBtn" disabled>Подготовить фото для всех 3 постов</button>
     <button id="copyBtn" class="secondary" disabled>Скопировать пакет</button>
@@ -57,6 +58,7 @@ const APP_ID=Number(OAUTH_PARAMS.get('vk_app_id'))||54796105;
 const GROUP_ID=241800139;
 const API_VERSION='5.199';
 const UPLOAD_PROXY='https://eppyjmtowtkxcwwhvwzp.supabase.co/functions/v1/khashuri-bundle-check-v14';
+const CONNECT_ENDPOINT='https://eppyjmtowtkxcwwhvwzp.supabase.co/functions/v1/geotrips-vk-photo-connect';
 
 const TOURS=[
   {
@@ -82,6 +84,7 @@ const TOURS=[
 const statusEl=document.getElementById('status');
 const tourSelect=document.getElementById('tourSelect');
 const tourInfo=document.getElementById('tourInfo');
+const connectBtn=document.getElementById('connectBtn');
 const uploadBtn=document.getElementById('uploadBtn');
 const uploadAllBtn=document.getElementById('uploadAllBtn');
 const copyBtn=document.getElementById('copyBtn');
@@ -141,11 +144,32 @@ async function init(){
   try{
     if(!window.vkBridge)throw new Error('VK Bridge не загрузился');
     await vkBridge.send('VKWebAppInit');
-    statusEl.textContent='Резервный ручной режим готов. Основная автозагрузка фото уже включена.';
+    statusEl.textContent='Мини-приложение готово. Сначала нажми «Подключить автоматическую загрузку фото».';
+    connectBtn.disabled=false;
     uploadBtn.disabled=false;
     uploadAllBtn.disabled=false;
   }catch(e){statusEl.textContent='Ошибка инициализации.';errorEl.textContent=errText(e);}
 }
+
+
+connectBtn.addEventListener('click',async()=>{
+  connectBtn.disabled=true;resultEl.textContent='';warningEl.textContent='';errorEl.textContent='';
+  try{
+    step('VK попросит доступ к фотографиям. Подтверди разрешение…');
+    const token=await getToken();
+    step('Проверяем токен на сервере и включаем автоматическую загрузку…');
+    const resp=await fetch(CONNECT_ENDPOINT,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'bridge_connect',access_token:token})});
+    const data=await resp.json().catch(()=>null);
+    if(!resp.ok || !data?.ok)throw new Error((data?.error || ('HTTP '+resp.status))+(data?.message?' — '+data.message:''));
+    statusEl.textContent='Автоматическая загрузка фото подключена ✅';
+    resultEl.textContent='Готово ✅ Теперь GeoTrips сможет загружать фото Tripster в VK автоматически. Регистрировать ИП или VK ID Business не требуется.';
+    step('Подключение сохранено. Можешь закрыть приложение.');
+  }catch(e){
+    statusEl.textContent='Подключение не завершено.';
+    errorEl.textContent='Ошибка: '+errText(e);
+    step('Пришли мне текст ошибки — исправим без регистрации ИП.');
+  }finally{connectBtn.disabled=false;}
+});
 
 uploadBtn.addEventListener('click',async()=>{
   uploadBtn.disabled=true;tourSelect.disabled=true;copyBtn.disabled=true;resultEl.textContent='';warningEl.textContent='';errorEl.textContent='';lastPacket='';
