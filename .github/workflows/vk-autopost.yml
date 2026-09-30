@@ -32,8 +32,6 @@ jobs:
       - name: Publish next queued post to VK
         env:
           VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
-          VK_GATEWAY_URL: "https://eppyjmtowtkxcwwhvwzp.supabase.co/functions/v1/khashuri-bundle-check-v14"
-          VK_GATEWAY_KEY: ${{ secrets.VK_GATEWAY_KEY }}
           VK_GROUP_ID: "241800139"
           VK_API_VERSION: "5.199"
         run: python run_publisher.py

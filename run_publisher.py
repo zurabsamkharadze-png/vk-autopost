@@ -321,22 +321,18 @@ def main():
             attachments.append(value)
 
     image_url = str(post.get("image_url", "")).strip()
-    gateway_url = os.getenv("VK_GATEWAY_URL", "").strip()
-    gateway_key = os.getenv("VK_GATEWAY_KEY", "").strip()
 
     if image_url:
         invalid = [a for a in attachments if not a.startswith("photo")]
         if invalid:
             fail(f"Queued post {post.get('id')} contains a non-photo VK attachment; refusing to publish: {invalid}")
         if not attachments:
-            if not gateway_url or not gateway_key:
-                fail("Native VK photo gateway is not configured; refusing to publish a Tripster post without a photo")
-            print("Uploading Tripster image as a native VK wall photo through the secure gateway...")
-            attachment = upload_wall_photo_via_gateway(gateway_url, gateway_key, image_url)
+            print("Uploading Tripster image as a native VK photo with the community token...")
+            attachment = upload_message_photo(group_token, image_url)
             if not attachment.startswith("photo"):
-                fail("VK gateway returned a non-photo attachment; refusing to publish")
+                fail("VK community photo upload returned a non-photo attachment; refusing to publish")
             attachments.append(attachment)
-            post["photo_mode"] = "native_wall_photo_via_gateway"
+            post["photo_mode"] = "community_token_native_photo"
 
     post_id = str(post.get("id") or uuid.uuid4().hex)
     guid = hashlib.sha256(post_id.encode("utf-8")).hexdigest()[:32]
