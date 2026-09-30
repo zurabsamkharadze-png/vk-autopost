@@ -11,16 +11,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Test community token photo permissions
+      - name: Test community token message-photo upload flow
         env:
           VK_ACCESS_TOKEN: ${{ secrets.VK_ACCESS_TOKEN }}
           VK_GROUP_ID: "241800139"
         run: |
           python - <<'PY'
-          import json, os, urllib.parse, urllib.request
+          import json, os, urllib.parse, urllib.request, uuid
 
           token = os.environ.get('VK_ACCESS_TOKEN', '').strip()
           group_id = os.environ.get('VK_GROUP_ID', '').strip()
+          image_url = 'https://resize.tripster.ru/5-Zb81g6rfGSGHysszr6G_pG-uI%3D/fit-in/800x600/filters%3Ano_upscale%28%29/https%3A//cdn.tripster.ru/photos/353a1b90-06fb-406c-81a5-e4a627761e0d.jpg'
           if not token:
               raise SystemExit('VK_ACCESS_TOKEN missing')
 
@@ -35,19 +36,62 @@ jobs:
               with urllib.request.urlopen(req, timeout=30) as r:
                   return json.loads(r.read().decode('utf-8'))
 
-          tests = [
-              ('photos.getWallUploadServer', {'group_id': group_id}),
-              ('photos.getMessagesUploadServer', {'group_id': group_id}),
+          server_data = call('photos.getMessagesUploadServer', group_id=group_id)
+          if 'error' in server_data:
+              e = server_data['error']
+              raise SystemExit(f'getMessagesUploadServer error {e.get("error_code")}: {e.get("error_msg")}')
+          upload_url = server_data['response']['upload_url']
+          print('getMessagesUploadServer: OK')
+
+          req = urllib.request.Request(image_url, headers={'User-Agent':'Mozilla/5.0','Referer':'https://experience.tripster.ru/'})
+          with urllib.request.urlopen(req, timeout=45) as r:
+              image_bytes = r.read()
+              content_type = r.headers.get_content_type() or 'image/jpeg'
+          print(f'image_download: OK bytes={len(image_bytes)} type={content_type}')
+
+          boundary = '----GeoTrips' + uuid.uuid4().hex
+          field_name = 'file1' if 'bulk_upload' in urllib.parse.urlparse(upload_url).path else 'photo'
+          filename = 'tripster.jpg'
+          parts = [
+              f'--{boundary}\r\n'.encode(),
+              f'Content-Disposition: form-data; name="{field_name}"; filename="{filename}"\r\n'.encode(),
+              f'Content-Type: {content_type}\r\n\r\n'.encode(),
+              image_bytes,
+              f'\r\n--{boundary}--\r\n'.encode(),
           ]
-          for method, params in tests:
-              data = call(method, **params)
-              if 'error' in data:
-                  e = data['error']
-                  print(f'{method}: ERROR code={e.get("error_code")} msg={e.get("error_msg")}')
-              else:
-                  resp = data.get('response')
-                  if isinstance(resp, dict) and resp.get('upload_url'):
-                      print(f'{method}: OK upload_url_received=yes')
+          body = b''.join(parts)
+          up_req = urllib.request.Request(
+              upload_url,
+              data=body,
+              method='POST',
+              headers={'Content-Type':f'multipart/form-data; boundary={boundary}','Content-Length':str(len(body)),'User-Agent':'geotrips-vk-diagnostic/1.0'},
+          )
+          with urllib.request.urlopen(up_req, timeout=60) as r:
+              raw = r.read().decode('utf-8','replace')
+          print('upload_raw_prefix:', raw[:500].replace('\n',' '))
+          uploaded = json.loads(raw)
+          print('upload_keys:', sorted(uploaded.keys()) if isinstance(uploaded, dict) else type(uploaded).__name__)
+
+          if isinstance(uploaded, dict):
+              photo_payload = uploaded.get('photo')
+              server = uploaded.get('server')
+              hash_value = uploaded.get('hash')
+              if photo_payload is not None:
+                  print('photo_payload_type:', type(photo_payload).__name__)
+              if server is not None: print('server_present: yes')
+              if hash_value is not None: print('hash_present: yes')
+
+              if photo_payload not in (None, '', '[]', '{}'):
+                  saved = call('photos.saveMessagesPhoto', photo=photo_payload, server=server, hash=hash_value)
+                  if 'error' in saved:
+                      e = saved['error']
+                      print(f'saveMessagesPhoto: ERROR code={e.get("error_code")} msg={e.get("error_msg")}')
                   else:
-                      print(f'{method}: OK response_type={type(resp).__name__}')
+                      resp = saved.get('response')
+                      print('saveMessagesPhoto: OK count=' + str(len(resp) if isinstance(resp,list) else 1))
+                      if isinstance(resp,list) and resp:
+                          p=resp[0]
+                          print(f'saved_attachment=photo{p.get("owner_id")}_{p.get("id")} access_key={"yes" if p.get("access_key") else "no"}')
+              else:
+                  print('saveMessagesPhoto: SKIP no photo payload')
           PY
