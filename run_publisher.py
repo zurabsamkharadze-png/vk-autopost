@@ -222,9 +222,9 @@ def upload_wall_photo(user_token: str, group_id: int, image_url: str) -> str:
     return attachment
 
 
-def upload_message_photo(group_token: str, image_url: str) -> str:
+def upload_message_photo(group_token: str, group_id: int, image_url: str) -> str:
     """Upload a VK photo through the community messages-photo endpoint and reuse it on the wall."""
-    server = vk_call("photos.getMessagesUploadServer", group_token)
+    server = vk_call("photos.getMessagesUploadServer", group_token, group_id=group_id)
     upload_url = server["upload_url"]
     path = urllib.parse.urlparse(upload_url).path
     filename, content_type, content = download_image(image_url)
@@ -328,7 +328,7 @@ def main():
             fail(f"Queued post {post.get('id')} contains a non-photo VK attachment; refusing to publish: {invalid}")
         if not attachments:
             print("Uploading Tripster image as a native VK photo with the community token...")
-            attachment = upload_message_photo(group_token, image_url)
+            attachment = upload_message_photo(group_token, group_id, image_url)
             if not attachment.startswith("photo"):
                 fail("VK community photo upload returned a non-photo attachment; refusing to publish")
             attachments.append(attachment)
