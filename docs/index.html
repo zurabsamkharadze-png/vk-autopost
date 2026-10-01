@@ -14,43 +14,35 @@
     button.secondary{background:#2e7d32}
     button:disabled{opacity:.55;cursor:not-allowed}
     input{width:100%;box-sizing:border-box;border:1px solid #cfd5dc;border-radius:12px;padding:13px;font-size:15px;margin:8px 0 12px}
-    .muted{color:#666;line-height:1.55}
-    .ok{color:#167c38;font-weight:700;white-space:pre-wrap;line-height:1.5}
-    .err{color:#b3261e;white-space:pre-wrap;line-height:1.5}
-    .info{background:#f7f8fa;border-radius:12px;padding:14px;line-height:1.55;margin:16px 0}
-    .step{border-left:4px solid #2688eb;padding-left:12px;margin:18px 0}
+    .muted{color:#666;line-height:1.55}.ok{color:#167c38;font-weight:700;white-space:pre-wrap;line-height:1.5}.err{color:#b3261e;white-space:pre-wrap;line-height:1.5}
+    .info{background:#f7f8fa;border-radius:12px;padding:14px;line-height:1.55;margin:16px 0}.step{border-left:4px solid #2688eb;padding-left:12px;margin:18px 0}
   </style>
 </head>
 <body>
 <main><div class="card">
   <h1>GeoTrips VK Photo Connect</h1>
-  <p class="muted">Однократное подключение серверной загрузки <b>нативных VK photo…</b> из карточек Tripster в сообщество GeoTrips.</p>
-
+  <p class="muted">Однократное подключение автоматической загрузки <b>нативных VK photo…</b> из карточек Tripster.</p>
   <div class="info">
-    <b>Community ID:</b> 241800139<br>
-    <b>OAuth:</b> Community Authorization Code Flow<br>
+    <b>Сообщество:</b> 241800139<br>
+    <b>OAuth:</b> пользовательский токен<br>
     <b>Право:</b> photos<br>
     <b>Callback:</b> https://oauth.vk.com/blank.html
   </div>
-
   <p id="status" class="muted">Проверяю подключение…</p>
-
   <div class="step">
-    <b>1. Дай сообществу право на фотографии</b>
-    <p class="muted">Нажми кнопку. VK откроется в новой вкладке. Подтверди доступ к фотографиям сообщества.</p>
+    <b>1. Разреши доступ к фотографиям</b>
+    <p class="muted">Нажми кнопку. VK откроется в новой вкладке. Подтверди право <b>photos</b> для своего аккаунта — это нужно серверу для <b>photos.getWallUploadServer</b>.</p>
     <button id="startBtn" disabled>Открыть VK и разрешить photos</button>
   </div>
-
   <div class="step">
     <b>2. Заверши подключение</b>
-    <p class="muted">После подтверждения VK откроет blank.html. Скопируй <b>полный адрес из адресной строки</b>, вернись сюда и вставь его ниже. Это URL с одноразовым code — не сам VK-токен.</p>
-    <input id="callbackUrl" autocomplete="off" spellcheck="false" placeholder="https://oauth.vk.com/blank.html?code=...&state=...">
+    <p class="muted">После подтверждения VK откроет blank.html. Скопируй <b>полный адрес из адресной строки</b>, вернись сюда и вставь его ниже. Это URL с одноразовым code, не сам токен.</p>
+    <input id="callbackUrl" autocomplete="off" spellcheck="false" placeholder="https://oauth.vk.ru/blank.html#code=...&state=...">
     <button id="finishBtn" class="secondary">Завершить подключение</button>
   </div>
-
   <p id="result" class="ok"></p>
   <p id="error" class="err"></p>
-  <p class="muted">После успеха сервер обменяет одноразовый code на токен сообщества, проверит <b>photos.getWallUploadServer</b> и сохранит токен в зашифрованном виде. Для следующих публикаций ручная загрузка фото больше не нужна.</p>
+  <p class="muted">После успеха сервер сохранит пользовательский токен в зашифрованном виде. В GitHub Actions сам VK-токен не передаётся.</p>
 </div></main>
 <script>
 const AUTH_ENDPOINT='https://eppyjmtowtkxcwwhvwzp.supabase.co/functions/v1/geotrips-vk-community-auth';
@@ -64,35 +56,24 @@ const callbackUrl=document.getElementById('callbackUrl');
 async function requestJson(url,options){
   const r=await fetch(url,options);
   const data=await r.json().catch(()=>null);
-  if(!r.ok||!data?.ok){
-    throw new Error((data?.error||('HTTP '+r.status))+(data?.message?' — '+data.message:''));
-  }
+  if(!r.ok||!data?.ok) throw new Error((data?.error||('HTTP '+r.status))+(data?.message?' — '+data.message:''));
   return data;
 }
 
 async function readStatus(){
   const data=await requestJson(AUTH_ENDPOINT,{cache:'no-store'});
-  if(!data.configured){
-    statusEl.textContent='Защищённый ключ приложения не настроен.';
-    throw new Error('client_secret_not_configured');
-  }
-  if(data.connected){
-    statusEl.textContent='Автоматическая загрузка фото подключена ✅';
-    resultEl.textContent='Серверный VK community token уже сохранён.';
-  }else{
-    statusEl.textContent='Сервер готов. Осталось один раз подтвердить право photos.';
-  }
+  if(!data.configured){statusEl.textContent='Защищённый ключ приложения не настроен.';throw new Error('client_secret_not_configured');}
+  if(data.connected){statusEl.textContent='Автоматическая загрузка фото подключена ✅';resultEl.textContent='Пользовательский VK token уже сохранён.';}
+  else statusEl.textContent='Сервер готов. Осталось один раз подтвердить право photos.';
   startBtn.disabled=false;
 }
 
 startBtn.addEventListener('click',async()=>{
   startBtn.disabled=true;errorEl.textContent='';resultEl.textContent='';
   try{
-    const data=await requestJson(AUTH_ENDPOINT,{
-      method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'begin'})
-    });
+    const data=await requestJson(AUTH_ENDPOINT,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'begin'})});
     const win=window.open(data.auth_url,'_blank','noopener');
-    if(!win)location.href=data.auth_url;
+    if(!win) location.href=data.auth_url;
     statusEl.textContent='VK открыт. Подтверди photos, затем скопируй полный URL blank.html и вставь его в шаг 2.';
   }catch(e){errorEl.textContent='Ошибка: '+(e?.message||String(e));}
   finally{startBtn.disabled=false;}
@@ -102,18 +83,14 @@ finishBtn.addEventListener('click',async()=>{
   finishBtn.disabled=true;errorEl.textContent='';resultEl.textContent='';
   try{
     const value=callbackUrl.value.trim();
-    if(!value)throw new Error('Вставь полный URL blank.html после подтверждения VK.');
-    statusEl.textContent='Обмениваю одноразовый code и проверяю право photos…';
-    const data=await requestJson(AUTH_ENDPOINT,{
-      method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'complete',callback_url:value})
-    });
+    if(!value) throw new Error('Вставь полный URL blank.html после подтверждения VK.');
+    statusEl.textContent='Обмениваю одноразовый code и проверяю photos.getWallUploadServer…';
+    const data=await requestJson(AUTH_ENDPOINT,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'complete',callback_url:value})});
     callbackUrl.value='';
     statusEl.textContent='Автоматическая загрузка фото подключена ✅';
-    resultEl.textContent='Готово ✅ Community token сохранён, photos.getWallUploadServer прошёл проверку. expires_in: '+String(data.expires_in)+'.';
-  }catch(e){
-    statusEl.textContent='Подключение не завершено.';
-    errorEl.textContent='Ошибка: '+(e?.message||String(e));
-  }finally{finishBtn.disabled=false;}
+    resultEl.textContent='Готово ✅ Пользовательский VK token сохранён, photos.getWallUploadServer прошёл проверку.';
+  }catch(e){statusEl.textContent='Подключение не завершено.';errorEl.textContent='Ошибка: '+(e?.message||String(e));}
+  finally{finishBtn.disabled=false;}
 });
 
 readStatus().catch(e=>{errorEl.textContent='Ошибка проверки: '+(e?.message||String(e));startBtn.disabled=false;});
