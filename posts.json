@@ -552,7 +552,7 @@
   },
   {
     "id": "turkey-pamukkale-salda-2026-09-30",
-    "status": "waiting_photo",
+    "status": "queued",
     "publish_after": "2026-09-30T17:40:00+00:00",
     "partner_link": "https://experience.tripster.ru/experience/127220/",
     "image_url": "https://resize.tripster.ru/SUR_LUkcTnNjV43Pwsmw8f02ZX0%3D/fit-in/800x600/filters%3Ano_upscale%28%29/https%3A//cdn.tripster.ru/photos/d1a995ff-0564-4039-8457-7787e25a78ba.jpg",
