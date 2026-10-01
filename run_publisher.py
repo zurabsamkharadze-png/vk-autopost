@@ -15,6 +15,7 @@ QUEUE_FILE = ROOT / "posts.json"
 VK_API_BASE = "https://api.vk.com/method"
 VK_API_VERSION = os.getenv("VK_API_VERSION", "5.199")
 AD_DISCLOSURE = "Реклама. TRIPSGO PORTAL L.L.C, ИНН 9909760608"
+MAX_WALL_ATTACHMENTS = 10
 
 
 def fail(message: str, code: int = 1):
@@ -28,7 +29,7 @@ def vk_call(method: str, token: str, **params):
     req = urllib.request.Request(
         f"{VK_API_BASE}/{method}",
         data=data,
-        headers={"User-Agent": "geotrips-vk-autopost/4.0"},
+        headers={"User-Agent": "geotrips-vk-autopost/4.1"},
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=45) as response:
@@ -54,7 +55,7 @@ def upload_wall_photo_via_gateway(gateway_url: str, gateway_key: str, image_url:
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {gateway_key}",
-            "User-Agent": "geotrips-vk-autopost/4.0",
+            "User-Agent": "geotrips-vk-autopost/4.1",
         },
         method="POST",
     )
@@ -121,14 +122,37 @@ def normalized_group_id(raw: str) -> int:
     return int(value)
 
 
-def is_tripster_post(post: dict, text: str, image_url: str) -> bool:
+def collect_image_urls(post: dict) -> list[str]:
+    urls: list[str] = []
+
+    single = str(post.get("image_url") or "").strip()
+    if single:
+        urls.append(single)
+
+    multiple = post.get("image_urls") or []
+    if isinstance(multiple, str):
+        multiple = [multiple]
+    if not isinstance(multiple, list):
+        fail(f"Queued post {post.get('id')} has invalid image_urls; expected an array")
+
+    for raw in multiple:
+        value = str(raw or "").strip()
+        if value and value not in urls:
+            urls.append(value)
+
+    return urls
+
+
+def is_tripster_post(post: dict, text: str, image_urls: list[str]) -> bool:
     haystack = " ".join(
         str(value or "")
         for value in (
             text,
-            image_url,
+            " ".join(image_urls),
             post.get("source"),
+            post.get("source_url"),
             post.get("partner"),
+            post.get("partner_link"),
             post.get("url"),
             post.get("title"),
         )
@@ -165,7 +189,7 @@ def main():
     if not text:
         fail(f"Queued post {post.get('id')} has empty text")
 
-    attachments = []
+    attachments: list[str] = []
     for attachment in post.get("attachments", []) or []:
         value = str(attachment).strip()
         if value and value not in attachments:
@@ -178,17 +202,39 @@ def main():
             f"refusing to publish: {invalid}"
         )
 
-    image_url = str(post.get("image_url", "")).strip()
-    tripster_post = is_tripster_post(post, text, image_url)
+    image_urls = collect_image_urls(post)
+    tripster_post = is_tripster_post(post, text, image_urls)
 
-    if image_url and not attachments:
-        print("Uploading Tripster image through the server gateway as a native VK photo...")
-        try:
-            attachment = upload_wall_photo_via_gateway(gateway_url, gateway_key, image_url)
-        except Exception as exc:
-            fail(f"Native VK photo upload failed; post will NOT be published: {exc}")
-        attachments.append(attachment)
+    if len(attachments) > MAX_WALL_ATTACHMENTS:
+        fail(
+            f"Queued post {post.get('id')} has {len(attachments)} attachments; "
+            f"maximum supported is {MAX_WALL_ATTACHMENTS}"
+        )
+
+    if image_urls and not attachments:
+        if len(image_urls) > MAX_WALL_ATTACHMENTS:
+            fail(
+                f"Queued post {post.get('id')} has {len(image_urls)} image URLs; "
+                f"maximum supported is {MAX_WALL_ATTACHMENTS}"
+            )
+
+        print(f"Uploading {len(image_urls)} Tripster image(s) as native VK photos...")
+        for index, image_url in enumerate(image_urls, start=1):
+            try:
+                attachment = upload_wall_photo_via_gateway(gateway_url, gateway_key, image_url)
+            except Exception as exc:
+                fail(
+                    f"Native VK photo upload {index}/{len(image_urls)} failed; "
+                    f"post will NOT be published: {exc}"
+                )
+            attachments.append(attachment)
         post["photo_mode"] = "community_oauth_native_photo"
+
+    if tripster_post and not image_urls and not attachments:
+        fail(
+            f"Tripster post {post.get('id')} contains no Tripster image URL and no native VK photo. "
+            "Text-only publication is forbidden."
+        )
 
     if tripster_post and not attachments:
         fail(
