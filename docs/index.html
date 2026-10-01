@@ -4,281 +4,129 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="noindex,nofollow">
-  <title>GeoTrips VK Helper</title>
-  <script src="https://unpkg.com/@vkontakte/vk-bridge/dist/browser.min.js"></script>
+  <title>GeoTrips VK Photo Connect</title>
   <style>
     body{font-family:Arial,sans-serif;background:#f5f5f7;color:#111;margin:0}
-    main{max-width:900px;margin:30px auto;padding:18px}
-    .card{background:#fff;border-radius:18px;padding:24px;box-shadow:0 8px 30px rgba(0,0,0,.08)}
-    select{width:100%;padding:12px;border:1px solid #d9dde3;border-radius:10px;font-size:15px;background:#fff}
-    .tourbox{margin:14px 0;padding:14px;background:#f7f8fa;border-radius:12px;line-height:1.5}
-    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:18px 0}
-    .grid img{width:100%;height:220px;object-fit:cover;border-radius:12px;background:#eee}
-    .actions{display:flex;gap:10px;flex-wrap:wrap;margin:16px 0}
-    button{border:0;border-radius:10px;padding:14px 18px;font-size:16px;cursor:pointer;background:#2688eb;color:#fff;font-weight:700}
-    button.secondary{background:#4b5d6b}
+    main{max-width:760px;margin:40px auto;padding:18px}
+    .card{background:#fff;border-radius:20px;padding:26px;box-shadow:0 8px 30px rgba(0,0,0,.08)}
+    h1{margin-top:0}
+    button{border:0;border-radius:12px;padding:15px 20px;font-size:16px;cursor:pointer;background:#2688eb;color:#fff;font-weight:700}
     button:disabled{opacity:.55;cursor:not-allowed}
-    .muted{color:#666;font-size:14px;line-height:1.5}
+    .muted{color:#666;line-height:1.55}
     .ok{color:#167c38;font-weight:700;white-space:pre-wrap;line-height:1.5}
-    .warn{color:#9a6700;font-weight:700;white-space:pre-wrap;line-height:1.5}
     .err{color:#b3261e;white-space:pre-wrap;line-height:1.5}
-    .steps{white-space:pre-wrap;background:#f7f8fa;border-radius:12px;padding:12px;margin-top:14px;font:14px/1.5 Arial,sans-serif}
-    @media(max-width:640px){.grid{grid-template-columns:1fr}.grid img{height:240px}}
+    .info{background:#f7f8fa;border-radius:12px;padding:14px;line-height:1.55;margin:16px 0}
   </style>
 </head>
 <body>
 <main><div class="card">
-  <h1>GeoTrips VK Helper</h1>
-  <p class="ok">GeoTrips Photo Helper</p>
-  <p class="muted"><b>Регистрация ИП и кабинет VK ID Business не нужны.</b> Для автозагрузки фото достаточно один раз дать этому мини-приложению доступ к фотографиям VK. Токен проверяется сервером и сохраняется в зашифрованном виде.</p>
-  <p>Подготовка нативных фото Tripster для 3 постов по Турции.</p>
-  <p class="muted">Используются уменьшенные фотографии Tripster (800×600 / 600×800), чтобы не повторялась ошибка <b>image_too_large</b>. Посты здесь НЕ публикуются.</p>
-  <p id="status" class="muted">Инициализация VK…</p>
-
-  <label for="tourSelect"><b>Выбери пост</b></label>
-  <select id="tourSelect"></select>
-  <div id="tourInfo" class="tourbox"></div>
-  <div class="grid" id="gallery"></div>
-
-  <div class="actions">
-    <button id="connectBtn" disabled style="background:#2e7d32">Подключить автозагрузку фото</button>
-    <button id="uploadBtn" disabled>Загрузить фото выбранного поста</button>
-    <button id="uploadAllBtn" disabled>Подготовить фото для всех 3 постов</button>
-    <button id="copyBtn" class="secondary" disabled>Скопировать пакет</button>
+  <h1>GeoTrips VK Photo Connect</h1>
+  <p class="muted">Однократное подключение нативной загрузки фотографий Tripster в сообщество <b>GeoTrips | Экскурсии и путешествия</b>.</p>
+  <div class="info">
+    <b>VK App ID:</b> 54796105<br>
+    <b>Community ID:</b> 241800139<br>
+    <b>Redirect URI:</b> https://zurabsamkharadze-png.github.io/vk-autopost/<br>
+    <b>Право:</b> photos
   </div>
-
-  <div id="steps" class="steps">Ожидание…</div>
-  <div id="result" class="ok" style="margin-top:16px"></div>
-  <div id="warning" class="warn" style="margin-top:12px"></div>
-  <div id="error" class="err" style="margin-top:16px"></div>
+  <p id="status" class="muted">Проверяю подключение…</p>
+  <button id="connectBtn" disabled>Подключить автозагрузку фото</button>
+  <p id="result" class="ok"></p>
+  <p id="error" class="err"></p>
+  <p class="muted">После успешного подключения токен сообщества сохраняется на сервере в зашифрованном виде. В GitHub Actions передаётся только серверный gateway key; сам VK-токен в workflow не выводится.</p>
 </div></main>
 <script>
-const OAUTH_PARAMS=new URLSearchParams(location.search);
-const APP_ID=Number(OAUTH_PARAMS.get('vk_app_id'))||54796105;
-const GROUP_ID=241800139;
+const APP_ID='54796105';
+const GROUP_ID='241800139';
 const API_VERSION='5.199';
-const UPLOAD_PROXY='https://eppyjmtowtkxcwwhvwzp.supabase.co/functions/v1/khashuri-bundle-check-v14';
-const CONNECT_ENDPOINT='https://eppyjmtowtkxcwwhvwzp.supabase.co/functions/v1/geotrips-vk-photo-connect';
-
-const TOURS=[
-  {
-    id:'turkey-pamukkale-salda-2026-09-30',time:'1',
-    title:'Памуккале и озеро Салда',
-    partner:'https://experience.tripster.ru/experience/127220/',
-    images:['https://resize.tripster.ru/SUR_LUkcTnNjV43Pwsmw8f02ZX0%3D/fit-in/800x600/filters%3Ano_upscale%28%29/https%3A//cdn.tripster.ru/photos/d1a995ff-0564-4039-8457-7787e25a78ba.jpg']
-  },
-  {
-    id:'turkey-fethiye-oludeniz-2026-09-30',time:'2',
-    title:'Фетхие и Олюдениз',
-    partner:'https://experience.tripster.ru/experience/113105/',
-    images:['https://resize.tripster.ru/rJB9ld6YxOT62mpMlhsSRLxH4hI%3D/fit-in/600x800/filters%3Ano_upscale%28%29/https%3A//cdn.tripster.ru/photos/8db63e54-c6a1-432e-b634-9b4a60f1498d.jpg']
-  },
-  {
-    id:'turkey-alanya-fortress-2026-09-30',time:'3',
-    title:'Алания — крепость и старый город',
-    partner:'https://experience.tripster.ru/experience/101035/',
-    images:['https://resize.tripster.ru/K3p10SZInsZOreK8JGN4fOgPIik%3D/fit-in/800x600/filters%3Ano_upscale%28%29/https%3A//cdn.tripster.ru/photos/e2ca73ab-ed48-4d6b-875f-0c23a0fff833.jpg']
-  }
-];
+const REDIRECT_URI='https://zurabsamkharadze-png.github.io/vk-autopost/';
+const GATEWAY='https://eppyjmtowtkxcwwhvwzp.supabase.co/functions/v1/khashuri-bundle-check-v14';
 
 const statusEl=document.getElementById('status');
-const tourSelect=document.getElementById('tourSelect');
-const tourInfo=document.getElementById('tourInfo');
-const connectBtn=document.getElementById('connectBtn');
-const uploadBtn=document.getElementById('uploadBtn');
-const uploadAllBtn=document.getElementById('uploadAllBtn');
-const copyBtn=document.getElementById('copyBtn');
-const stepsEl=document.getElementById('steps');
 const resultEl=document.getElementById('result');
-const warningEl=document.getElementById('warning');
 const errorEl=document.getElementById('error');
-const galleryEl=document.getElementById('gallery');
-let lastPacket='';
+const connectBtn=document.getElementById('connectBtn');
 
-function currentTour(){return TOURS[Number(tourSelect.value)||0];}
-function renderTour(){
-  const t=currentTour();
-  tourInfo.innerHTML=`<b>${t.time} — ${t.title}</b><br><span class="muted">Партнёрская ссылка: ${t.partner}</span>`;
-  galleryEl.innerHTML=t.images.map((u,i)=>`<img src="${u}" alt="Tripster фото ${i+1}">`).join('');
-  resultEl.textContent='';warningEl.textContent='';errorEl.textContent='';lastPacket='';copyBtn.disabled=true;
+function randomState(){
+  const bytes=new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes,b=>b.toString(16).padStart(2,'0')).join('');
 }
 
-tourSelect.innerHTML=TOURS.map((t,i)=>`<option value="${i}">${t.time} — ${t.title}</option>`).join('');
-tourSelect.addEventListener('change',renderTour);
-renderTour();
-
-function step(text){stepsEl.textContent=text;}
-function errText(e){
-  if(e?.error_data?.error_reason)return e.error_data.error_reason;
-  if(e?.error_data?.error_msg)return e.error_data.error_msg;
-  if(e?.message)return e.message;
-  return String(e);
-}
-async function api(method,token,params={}){
-  const r=await vkBridge.send('VKWebAppCallAPIMethod',{method,params:{...params,access_token:token,v:API_VERSION}});
-  return r?.response;
-}
-async function getToken(){
-  const auth=await vkBridge.send('VKWebAppGetAuthToken',{app_id:APP_ID,scope:'photos,groups'});
-  if(!auth?.access_token)throw new Error('VK не вернул пользовательский токен');
-  return auth.access_token;
-}
-async function uploadPhoto(token,imageUrl,index,total){
-  step(`Фото ${index}/${total}: получаем сервер загрузки VK…`);
-  const server=await api('photos.getWallUploadServer',token,{group_id:GROUP_ID});
-  if(!server?.upload_url)throw new Error('VK не вернул upload_url');
-  step(`Фото ${index}/${total}: передаём уменьшенное фото через сервер…`);
-  const proxyResp=await fetch(UPLOAD_PROXY,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({upload_url:server.upload_url,image_url:imageUrl})});
-  const proxyData=await proxyResp.json().catch(()=>null);
-  if(!proxyResp.ok || !proxyData?.ok)throw new Error((proxyData?.error || ('HTTP '+proxyResp.status))+(proxyData?.message?' — '+proxyData.message:''));
-  const u=proxyData.uploaded;
-  if(!u?.photo || u?.server===undefined || !u?.hash)throw new Error('VK вернул неполный ответ загрузки');
-  step(`Фото ${index}/${total}: сохраняем в VK…`);
-  const saved=await api('photos.saveWallPhoto',token,{group_id:GROUP_ID,photo:u.photo,server:u.server,hash:u.hash});
-  const photo=Array.isArray(saved)?saved[0]:null;
-  if(!photo?.id)throw new Error('VK не вернул сохранённое фото');
-  return 'photo'+photo.owner_id+'_'+photo.id+(photo.access_key?'_'+photo.access_key:'');
-}
-
-async function init(){
-  try{
-    if(!window.vkBridge)throw new Error('VK Bridge не загрузился');
-    await vkBridge.send('VKWebAppInit');
-    statusEl.textContent='Нажмите «Подключить автозагрузку фото» один раз. После этого GeoTrips сможет загружать фотографии Tripster в VK автоматически.';
-    connectBtn.disabled=false;
-    uploadBtn.disabled=false;
-    uploadAllBtn.disabled=false;
-  }catch(e){statusEl.textContent='Ошибка инициализации.';errorEl.textContent=errText(e);}
-}
-
-
-connectBtn.addEventListener('click',async()=>{
-  connectBtn.disabled=true;resultEl.textContent='';warningEl.textContent='';errorEl.textContent='';
-  try{
-    step('VK попросит доступ к фотографиям. Подтверди разрешение…');
-    const token=await getToken();
-    step('Проверяем токен на сервере и включаем автоматическую загрузку…');
-    const resp=await fetch(CONNECT_ENDPOINT,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'bridge_connect',access_token:token})});
-    const data=await resp.json().catch(()=>null);
-    if(!resp.ok || !data?.ok)throw new Error((data?.error || ('HTTP '+resp.status))+(data?.message?' — '+data.message:''));
+async function readStatus(){
+  const r=await fetch(GATEWAY+'?action=status_public',{cache:'no-store'});
+  const data=await r.json().catch(()=>null);
+  if(!r.ok||!data?.ok)throw new Error(data?.error||('HTTP '+r.status));
+  if(data.connected){
     statusEl.textContent='Автоматическая загрузка фото подключена ✅';
-    resultEl.textContent='Готово ✅ Теперь GeoTrips сможет загружать фото Tripster в VK автоматически. Регистрировать ИП или VK ID Business не требуется.';
-    step('Подключение сохранено. Можешь закрыть приложение.');
+    resultEl.textContent='Серверный токен сообщества уже сохранён. GeoTrips может автоматически создавать нативные VK attachment photo…';
+  }else{
+    statusEl.textContent='Подключение ещё не завершено.';
+  }
+}
+
+async function handleOAuthResult(){
+  const query=new URLSearchParams(location.search);
+  if(query.get('error')){
+    throw new Error(query.get('error_description')||query.get('error'));
+  }
+
+  const fragment=new URLSearchParams(location.hash.replace(/^#/,''));
+  const token=fragment.get('access_token_'+GROUP_ID);
+  if(!token)return false;
+
+  const expectedState=sessionStorage.getItem('geotrips_vk_oauth_state')||'';
+  const returnedState=fragment.get('state')||'';
+  if(expectedState && returnedState && expectedState!==returnedState){
+    throw new Error('VK OAuth state mismatch');
+  }
+
+  statusEl.textContent='Проверяю право photos и сохраняю токен сообщества…';
+  const r=await fetch(GATEWAY,{
+    method:'POST',
+    headers:{'content-type':'application/json'},
+    body:JSON.stringify({action:'community_connect',access_token:token})
+  });
+  const data=await r.json().catch(()=>null);
+  history.replaceState({},document.title,REDIRECT_URI);
+  sessionStorage.removeItem('geotrips_vk_oauth_state');
+
+  if(!r.ok||!data?.ok){
+    throw new Error((data?.error||('HTTP '+r.status))+(data?.message?' — '+data.message:''));
+  }
+
+  statusEl.textContent='Автоматическая загрузка фото подключена ✅';
+  resultEl.textContent='Готово. Сервер проверил photos.getWallUploadServer для сообщества 241800139 и сохранил токен. Ручной GeoTrips VK Helper для следующих Tripster-постов больше не нужен.';
+  return true;
+}
+
+connectBtn.addEventListener('click',()=>{
+  errorEl.textContent='';
+  resultEl.textContent='';
+  const state=randomState();
+  sessionStorage.setItem('geotrips_vk_oauth_state',state);
+  const auth=new URL('https://oauth.vk.com/authorize');
+  auth.searchParams.set('client_id',APP_ID);
+  auth.searchParams.set('redirect_uri',REDIRECT_URI);
+  auth.searchParams.set('group_ids',GROUP_ID);
+  auth.searchParams.set('display','page');
+  auth.searchParams.set('scope','photos');
+  auth.searchParams.set('response_type','token');
+  auth.searchParams.set('v',API_VERSION);
+  auth.searchParams.set('state',state);
+  location.assign(auth.toString());
+});
+
+(async()=>{
+  try{
+    const completed=await handleOAuthResult();
+    if(!completed)await readStatus();
+    connectBtn.disabled=false;
   }catch(e){
     statusEl.textContent='Подключение не завершено.';
-    errorEl.textContent='Ошибка: '+errText(e);
-    step('Пришли мне текст ошибки — исправим без регистрации ИП.');
-  }finally{connectBtn.disabled=false;}
-});
-
-uploadBtn.addEventListener('click',async()=>{
-  uploadBtn.disabled=true;tourSelect.disabled=true;copyBtn.disabled=true;resultEl.textContent='';warningEl.textContent='';errorEl.textContent='';lastPacket='';
-  const t=currentTour();
-  const attachments=[];const failures=[];
-  try{
-    step('Получаем разрешение photos у VK…');
-    const token=await getToken();
-    for(let i=0;i<t.images.length;i++){
-      try{attachments.push(await uploadPhoto(token,t.images[i],i+1,t.images.length));}
-      catch(e){failures.push(`Фото ${i+1}: ${errText(e)}`);}
-    }
-    if(attachments.length<1)throw new Error('Не удалось подготовить фотографию. Пришли мне текст ошибки.');
-    lastPacket=JSON.stringify({id:t.id,time:t.time,title:t.title,partner:t.partner,attachments},null,2);
-    resultEl.textContent=`Успех ✅ Подготовлено фото: ${attachments.length}\n\n${lastPacket}`;
-    if(failures.length)warningEl.textContent='Некоторые фото пропущены:\n'+failures.join('\n')+'\n\nПост всё равно можно публиковать с '+attachments.length+' фото.';
-    step('Готово. Пост НЕ опубликован. Скопируй пакет и пришли его мне.');
-    statusEl.textContent=`Готово: ${attachments.length} нативных фото подготовлены.`;
-    copyBtn.disabled=false;
-  }catch(e){statusEl.textContent='Загрузка остановлена.';errorEl.textContent='Ошибка: '+errText(e)+(failures.length?'\n'+failures.join('\n'):'');}
-  finally{uploadBtn.disabled=false;tourSelect.disabled=false;}
-});
-
-uploadAllBtn.addEventListener('click',async()=>{
-  uploadBtn.disabled=true;uploadAllBtn.disabled=true;tourSelect.disabled=true;copyBtn.disabled=true;resultEl.textContent='';warningEl.textContent='';errorEl.textContent='';lastPacket='';
-  const packages=[];const allFailures=[];
-  try{
-    step('Получаем одно разрешение photos у VK для всех 3 экскурсий…');
-    const token=await getToken();
-    for(let ti=0;ti<TOURS.length;ti++){
-      const t=TOURS[ti];
-      const attachments=[];const failures=[];
-      statusEl.textContent=`Тур ${ti+1}/${TOURS.length}: ${t.title}`;
-      for(let i=0;i<t.images.length;i++){
-        try{
-          step(`Тур ${ti+1}/${TOURS.length}, фото ${i+1}/${t.images.length}: загружаем в VK…`);
-          attachments.push(await uploadPhoto(token,t.images[i],i+1,t.images.length));
-        }catch(e){
-          const msg=`${t.time} — фото ${i+1}: ${errText(e)}`;
-          failures.push(msg);allFailures.push(msg);
-        }
-      }
-      if(attachments.length>=1){
-        packages.push({id:t.id,time:t.time,title:t.title,partner:t.partner,attachments});
-      }else{
-        allFailures.push(`${t.time} — фото не подготовлено, экскурсия пропущена.`);
-      }
-    }
-    if(!packages.length)throw new Error('Не удалось подготовить фотографии ни для одного тура.');
-    lastPacket=JSON.stringify({type:'vk_tripster_batch',tours:packages},null,2);
-    resultEl.textContent=`Успех ✅ Подготовлено туров: ${packages.length}/${TOURS.length}\n\n${lastPacket}`;
-    if(allFailures.length)warningEl.textContent='Некоторые фотографии пропущены:\n'+allFailures.join('\n');
-    step('Готово. Все доступные фото подготовлены. Нажми «Скопировать пакет» один раз и пришли его мне.');
-    statusEl.textContent=`Готово: подготовлено ${packages.length} из ${TOURS.length} туров.`;
-    copyBtn.disabled=false;
-  }catch(e){
-    statusEl.textContent='Массовая загрузка остановлена.';
-    errorEl.textContent='Ошибка: '+errText(e)+(allFailures.length?'\n'+allFailures.join('\n'):'');
-  }finally{
-    uploadBtn.disabled=false;uploadAllBtn.disabled=false;tourSelect.disabled=false;
+    errorEl.textContent='Ошибка: '+(e?.message||String(e));
+    connectBtn.disabled=false;
   }
-});
-
-copyBtn.addEventListener('click',async()=>{
-  if(!lastPacket)return;
-  let copied=false;
-  try{
-    if(navigator.clipboard && navigator.clipboard.writeText){
-      await navigator.clipboard.writeText(lastPacket);
-      copied=true;
-    }
-  }catch(e){}
-  if(!copied){
-    try{
-      const ta=document.createElement('textarea');
-      ta.value=lastPacket;
-      ta.setAttribute('readonly','');
-      ta.style.position='fixed';
-      ta.style.left='-9999px';
-      ta.style.top='0';
-      document.body.appendChild(ta);
-      ta.focus();
-      ta.select();
-      ta.setSelectionRange(0, ta.value.length);
-      copied=document.execCommand('copy');
-      document.body.removeChild(ta);
-    }catch(e){}
-  }
-  if(copied){
-    copyBtn.textContent='Скопировано ✓';
-    warningEl.textContent='Пакет скопирован. Вставь его в чат ChatGPT.';
-    setTimeout(()=>copyBtn.textContent='Скопировать пакет',1800);
-  }else{
-    try{
-      const ta=document.createElement('textarea');
-      ta.value=lastPacket;
-      ta.style.width='100%';
-      ta.style.minHeight='220px';
-      ta.style.marginTop='12px';
-      ta.style.fontSize='13px';
-      ta.id='packetFallback';
-      const old=document.getElementById('packetFallback'); if(old) old.remove();
-      resultEl.parentNode.insertBefore(ta, warningEl);
-      ta.focus(); ta.select();
-      warningEl.textContent='Автокопирование заблокировано VK. Пакет уже выделен ниже — нажми Ctrl+C один раз.';
-    }catch(e){warningEl.textContent='Автокопирование заблокировано VK. Выдели JSON-пакет выше вручную.';}
-  }
-});
-
-init();
+})();
 </script>
-</body></html>
+</body>
+</html>

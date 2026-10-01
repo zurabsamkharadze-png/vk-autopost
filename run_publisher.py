@@ -1,9 +1,7 @@
 #!/usr/bin/env python3
 import hashlib
 import json
-import mimetypes
 import os
-import subprocess
 import sys
 import urllib.error
 import urllib.parse
@@ -14,9 +12,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 QUEUE_FILE = ROOT / "posts.json"
-ENCRYPTED_USER_TOKEN_FILE = ROOT / "vk_user_token.enc"
 VK_API_BASE = "https://api.vk.com/method"
 VK_API_VERSION = os.getenv("VK_API_VERSION", "5.199")
+AD_DISCLOSURE = "Реклама. TRIPSGO PORTAL L.L.C, ИНН 9909760608"
 
 
 def fail(message: str, code: int = 1):
@@ -30,7 +28,7 @@ def vk_call(method: str, token: str, **params):
     req = urllib.request.Request(
         f"{VK_API_BASE}/{method}",
         data=data,
-        headers={"User-Agent": "geotrips-vk-autopost/2.0"},
+        headers={"User-Agent": "geotrips-vk-autopost/4.0"},
         method="POST",
     )
     with urllib.request.urlopen(req, timeout=45) as response:
@@ -43,139 +41,12 @@ def vk_call(method: str, token: str, **params):
     return body.get("response")
 
 
-def decrypt_server_user_token(client_secret: str) -> str:
-    if not ENCRYPTED_USER_TOKEN_FILE.exists():
-        return ""
-    if not client_secret:
-        fail("Encrypted VK user token exists, but VK_CLIENT_SECRET is missing")
-    env = os.environ.copy()
-    env["VK_TOKEN_PASSPHRASE"] = client_secret
-    proc = subprocess.run(
-        [
-            "openssl", "enc", "-d", "-aes-256-cbc", "-pbkdf2", "-iter", "200000",
-            "-pass", "env:VK_TOKEN_PASSPHRASE", "-a", "-A"
-        ],
-        input=ENCRYPTED_USER_TOKEN_FILE.read_bytes(),
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        env=env,
-        check=False,
-    )
-    if proc.returncode != 0:
-        fail("Could not decrypt the stored VK user token")
-    token = proc.stdout.decode("utf-8").strip()
-    if not token:
-        fail("Stored VK user token decrypted to an empty value")
-    return token
-
-
-def download_image(url: str):
-    req = urllib.request.Request(
-        url,
-        headers={
-            "User-Agent": "Mozilla/5.0",
-            "Referer": "https://experience.tripster.ru/",
-        },
-    )
-    with urllib.request.urlopen(req, timeout=60) as response:
-        content = response.read()
-        content_type = response.headers.get_content_type() or "application/octet-stream"
-    if not content:
-        raise RuntimeError("Downloaded image is empty")
-    if not content_type.startswith("image/"):
-        raise RuntimeError(f"Image URL returned unexpected content type: {content_type}")
-    ext = mimetypes.guess_extension(content_type) or ".jpg"
-    return f"tripster{ext}", content_type, content
-
-
-def multipart_upload(url: str, field_name: str, filename: str, content_type: str, content: bytes):
-    boundary = f"----GeoTripsVK{uuid.uuid4().hex}"
-    body = b"".join([
-        f"--{boundary}\r\n".encode(),
-        (
-            f'Content-Disposition: form-data; name="{field_name}"; filename="{filename}"\r\n'
-            f"Content-Type: {content_type}\r\n\r\n"
-        ).encode(),
-        content,
-        f"\r\n--{boundary}--\r\n".encode(),
-    ])
-    req = urllib.request.Request(
-        url,
-        data=body,
-        headers={
-            "Content-Type": f"multipart/form-data; boundary={boundary}",
-            "Content-Length": str(len(body)),
-            "User-Agent": "geotrips-vk-autopost/2.0",
-        },
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=90) as response:
-        return json.loads(response.read().decode("utf-8"))
-
-
-
-def upload_wall_image_document(group_token: str, group_id: int, image_url: str, title: str = "GeoTrips photo") -> str:
-    """Upload an image as a VK image-document using only the community token.
-
-    VK group tokens cannot use photos.getWallUploadServer, but VK API 5.199
-    allows docs.getWallUploadServer/docs.save with group auth. Image documents
-    include a photo preview and can be attached to wall.post.
-    """
-    filename, content_type, content = download_image(image_url)
-    last_error = "unknown upload error"
-    uploaded = None
-
-    for attempt in range(1, 9):
-        server = vk_call("docs.getWallUploadServer", group_token, group_id=group_id)
-        upload_url = str((server or {}).get("upload_url") or "").strip()
-        if not upload_url:
-            last_error = "VK returned no document upload URL"
-            continue
-        try:
-            result = multipart_upload(upload_url, "file", filename, content_type, content)
-        except urllib.error.HTTPError as exc:
-            detail = exc.read().decode("utf-8", "replace")
-            last_error = f"HTTP {exc.code}: {detail[:300]}"
-            print(f"VK document upload attempt {attempt} failed: {last_error}")
-            continue
-        except Exception as exc:
-            last_error = str(exc)
-            print(f"VK document upload attempt {attempt} failed: {last_error}")
-            continue
-
-        file_token = str((result or {}).get("file") or "").strip()
-        if file_token:
-            uploaded = result
-            print(f"VK document upload succeeded on attempt {attempt}.")
-            break
-
-        last_error = f"{(result or {}).get('error', 'no file token')}: {(result or {}).get('error_descr', '')}".strip()
-        print(f"VK document upload attempt {attempt} failed: {last_error}")
-
-    if not uploaded:
-        raise RuntimeError(f"Could not upload Tripster image to VK after retries: {last_error}")
-
-    saved = vk_call(
-        "docs.save",
-        group_token,
-        file=uploaded["file"],
-        title=title[:100] or "GeoTrips photo",
-    )
-    doc = saved.get("doc") if isinstance(saved, dict) else None
-    if not isinstance(doc, dict):
-        raise RuntimeError("VK docs.save did not return an image document")
-
-    preview = ((doc.get("preview") or {}).get("photo") or {})
-    sizes = preview.get("sizes") or []
-    if not sizes:
-        raise RuntimeError("VK saved the document but returned no image preview; post was not published")
-
-    attachment = f"doc{doc['owner_id']}_{doc['id']}"
-    if doc.get("access_key"):
-        attachment += f"_{doc['access_key']}"
-    return attachment
-
 def upload_wall_photo_via_gateway(gateway_url: str, gateway_key: str, image_url: str) -> str:
+    if not gateway_url:
+        raise RuntimeError("VK_GATEWAY_URL is missing")
+    if not gateway_key:
+        raise RuntimeError("VK_GATEWAY_KEY secret is missing")
+
     payload = json.dumps({"action": "upload", "image_url": image_url}).encode("utf-8")
     req = urllib.request.Request(
         gateway_url,
@@ -183,7 +54,7 @@ def upload_wall_photo_via_gateway(gateway_url: str, gateway_key: str, image_url:
         headers={
             "Content-Type": "application/json",
             "Authorization": f"Bearer {gateway_key}",
-            "User-Agent": "geotrips-vk-autopost/3.0",
+            "User-Agent": "geotrips-vk-autopost/4.0",
         },
         method="POST",
     )
@@ -193,62 +64,15 @@ def upload_wall_photo_via_gateway(gateway_url: str, gateway_key: str, image_url:
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", "replace")
         raise RuntimeError(f"VK photo gateway HTTP {exc.code}: {detail[:500]}") from exc
+
     if not body.get("ok"):
-        raise RuntimeError(f"VK photo gateway failed: {body.get('error')} {body.get('message', '')}".strip())
+        raise RuntimeError(
+            f"VK photo gateway failed: {body.get('error')} {body.get('message', '')}".strip()
+        )
+
     attachment = str(body.get("attachment") or "").strip()
     if not attachment.startswith("photo"):
         raise RuntimeError("VK photo gateway did not return a native photo attachment")
-    return attachment
-
-
-def upload_wall_photo(user_token: str, group_id: int, image_url: str) -> str:
-    server = vk_call("photos.getWallUploadServer", user_token, group_id=group_id)
-    filename, content_type, content = download_image(image_url)
-    uploaded = multipart_upload(server["upload_url"], "photo", filename, content_type, content)
-    saved = vk_call(
-        "photos.saveWallPhoto",
-        user_token,
-        group_id=group_id,
-        photo=uploaded["photo"],
-        server=uploaded["server"],
-        hash=uploaded["hash"],
-    )
-    if not saved:
-        raise RuntimeError("VK did not return saved wall photo data")
-    photo = saved[0]
-    attachment = f"photo{photo['owner_id']}_{photo['id']}"
-    if photo.get("access_key"):
-        attachment += f"_{photo['access_key']}"
-    return attachment
-
-
-def upload_message_photo(group_token: str, group_id: int, image_url: str) -> str:
-    """Upload a VK photo with a community token through the messages-photo endpoint and reuse it on the wall.
-
-    VK API 5.199 allows group tokens for photos.getMessagesUploadServer/photos.saveMessagesPhoto.
-    Do not pass group_id to getMessagesUploadServer (it is not a supported parameter there), and always
-    upload the binary in the standard `photo` multipart field.
-    """
-    server = vk_call("photos.getMessagesUploadServer", group_token)
-    upload_url = server["upload_url"]
-    filename, content_type, content = download_image(image_url)
-    uploaded = multipart_upload(upload_url, "photo", filename, content_type, content)
-    photo_payload = uploaded.get("photo")
-    if not photo_payload or str(photo_payload).strip() in ("", "[]", "{}", "None"):
-        raise RuntimeError("VK message photo upload did not return a savable photo payload")
-    saved = vk_call(
-        "photos.saveMessagesPhoto",
-        group_token,
-        photo=photo_payload,
-        server=uploaded.get("server"),
-        hash=uploaded.get("hash"),
-    )
-    if not saved:
-        raise RuntimeError("VK did not return saved message photo data")
-    photo = saved[0]
-    attachment = f"photo{photo['owner_id']}_{photo['id']}"
-    if photo.get("access_key"):
-        attachment += f"_{photo['access_key']}"
     return attachment
 
 
@@ -297,9 +121,33 @@ def normalized_group_id(raw: str) -> int:
     return int(value)
 
 
+def is_tripster_post(post: dict, text: str, image_url: str) -> bool:
+    haystack = " ".join(
+        str(value or "")
+        for value in (
+            text,
+            image_url,
+            post.get("source"),
+            post.get("partner"),
+            post.get("url"),
+            post.get("title"),
+        )
+    ).lower()
+    return "tripster" in haystack
+
+
+def ensure_ad_disclosure(text: str) -> str:
+    text = text.rstrip()
+    if text.endswith(AD_DISCLOSURE):
+        return text
+    return f"{text}\n\n{AD_DISCLOSURE}"
+
+
 def main():
     group_token = os.getenv("VK_ACCESS_TOKEN", "").strip()
     raw_group_id = os.getenv("VK_GROUP_ID", "").strip()
+    gateway_url = os.getenv("VK_GATEWAY_URL", "").strip()
+    gateway_key = os.getenv("VK_GATEWAY_KEY", "").strip()
 
     if not group_token:
         fail("VK_ACCESS_TOKEN secret is missing")
@@ -323,20 +171,34 @@ def main():
         if value and value not in attachments:
             attachments.append(value)
 
-    image_url = str(post.get("image_url", "")).strip()
+    invalid = [a for a in attachments if not a.startswith("photo")]
+    if invalid:
+        fail(
+            f"Queued post {post.get('id')} contains a non-photo VK attachment; "
+            f"refusing to publish: {invalid}"
+        )
 
-    if image_url:
-        invalid = [a for a in attachments if not (a.startswith("photo") or a.startswith("doc"))]
-        if invalid:
-            fail(f"Queued post {post.get('id')} contains an unsupported VK attachment; refusing to publish: {invalid}")
-        if not attachments:
-            print("Uploading Tripster image through VK docs.getWallUploadServer with the community token...")
-            title = str(post.get("title") or post.get("id") or "GeoTrips photo")
-            attachment = upload_wall_image_document(group_token, group_id, image_url, title)
-            if not attachment.startswith("doc"):
-                fail("VK community image upload returned an unexpected attachment; refusing to publish")
-            attachments.append(attachment)
-            post["photo_mode"] = "community_token_image_document"
+    image_url = str(post.get("image_url", "")).strip()
+    tripster_post = is_tripster_post(post, text, image_url)
+
+    if image_url and not attachments:
+        print("Uploading Tripster image through the server gateway as a native VK photo...")
+        try:
+            attachment = upload_wall_photo_via_gateway(gateway_url, gateway_key, image_url)
+        except Exception as exc:
+            fail(f"Native VK photo upload failed; post will NOT be published: {exc}")
+        attachments.append(attachment)
+        post["photo_mode"] = "community_oauth_native_photo"
+
+    if tripster_post and not attachments:
+        fail(
+            f"Tripster post {post.get('id')} has no native VK photo. "
+            "Text-only publication is forbidden."
+        )
+
+    if tripster_post:
+        text = ensure_ad_disclosure(text)
+        post["text"] = text
 
     post_id = str(post.get("id") or uuid.uuid4().hex)
     guid = hashlib.sha256(post_id.encode("utf-8")).hexdigest()[:32]
