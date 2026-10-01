@@ -246,7 +246,7 @@ def main():
                 )
                 print(f"Skipping failed Tripster image {index}/{len(image_urls)} after 3 attempts.")
 
-        if tripster_post and len(attachments) < min_native_photos:
+        if len(attachments) < min_native_photos:
             fail(
                 f"Only {len(attachments)} native VK photo(s) uploaded successfully; "
                 f"at least {min_native_photos} required. Post will NOT be published. "
@@ -278,17 +278,32 @@ def main():
     post_id = str(post.get("id") or uuid.uuid4().hex)
     guid = hashlib.sha256(post_id.encode("utf-8")).hexdigest()[:32]
 
-    result = vk_call(
-        "wall.post",
-        group_token,
-        owner_id=-group_id,
-        from_group=1,
-        message=text,
-        attachments=",".join(attachments) if attachments else "",
-        guid=guid,
-    )
-
-    vk_post_id = result.get("post_id") if isinstance(result, dict) else result
+    edit_post_id = post.get("edit_vk_post_id")
+    if edit_post_id is not None:
+        try:
+            edit_post_id = int(edit_post_id)
+        except (TypeError, ValueError):
+            fail(f"Queued post {post.get('id')} has invalid edit_vk_post_id")
+        result = vk_call(
+            "wall.edit",
+            group_token,
+            owner_id=-group_id,
+            post_id=edit_post_id,
+            message=text,
+            attachments=",".join(attachments) if attachments else "",
+        )
+        vk_post_id = edit_post_id
+    else:
+        result = vk_call(
+            "wall.post",
+            group_token,
+            owner_id=-group_id,
+            from_group=1,
+            message=text,
+            attachments=",".join(attachments) if attachments else "",
+            guid=guid,
+        )
+        vk_post_id = result.get("post_id") if isinstance(result, dict) else result
     if attachments:
         post["attachments"] = attachments
     post["status"] = "published"
