@@ -3,6 +3,7 @@ import hashlib
 import json
 import os
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -219,15 +220,43 @@ def main():
             )
 
         print(f"Uploading {len(image_urls)} Tripster image(s) as native VK photos...")
+        min_native_photos = min(4, len(image_urls)) if tripster_post else 1
+        upload_errors: list[str] = []
         for index, image_url in enumerate(image_urls, start=1):
-            try:
-                attachment = upload_wall_photo_via_gateway(gateway_url, gateway_key, image_url)
-            except Exception as exc:
-                fail(
-                    f"Native VK photo upload {index}/{len(image_urls)} failed; "
-                    f"post will NOT be published: {exc}"
+            attachment = None
+            last_error = None
+            for attempt in range(1, 4):
+                try:
+                    attachment = upload_wall_photo_via_gateway(gateway_url, gateway_key, image_url)
+                    break
+                except Exception as exc:
+                    last_error = exc
+                    if attempt < 3:
+                        delay = 12 * attempt
+                        print(
+                            f"Native VK photo upload {index}/{len(image_urls)} attempt {attempt}/3 failed; "
+                            f"retrying in {delay}s: {exc}"
+                        )
+                        time.sleep(delay)
+            if attachment:
+                attachments.append(attachment)
+            else:
+                upload_errors.append(
+                    f"image {index}/{len(image_urls)}: {last_error}"
                 )
-            attachments.append(attachment)
+                print(f"Skipping failed Tripster image {index}/{len(image_urls)} after 3 attempts.")
+
+        if tripster_post and len(attachments) < min_native_photos:
+            fail(
+                f"Only {len(attachments)} native VK photo(s) uploaded successfully; "
+                f"at least {min_native_photos} required. Post will NOT be published. "
+                f"Errors: {' | '.join(upload_errors)}"
+            )
+        if upload_errors:
+            print(
+                f"Continuing with {len(attachments)} successful native VK photo(s); "
+                f"{len(upload_errors)} image(s) failed."
+            )
         post["photo_mode"] = "community_oauth_native_photo"
 
     if tripster_post and not image_urls and not attachments:
