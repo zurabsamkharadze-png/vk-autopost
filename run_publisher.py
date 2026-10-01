@@ -284,14 +284,34 @@ def main():
             edit_post_id = int(edit_post_id)
         except (TypeError, ValueError):
             fail(f"Queued post {post.get('id')} has invalid edit_vk_post_id")
-        result = vk_call(
-            "wall.edit",
-            group_token,
-            owner_id=-group_id,
-            post_id=edit_post_id,
-            message=text,
-            attachments=",".join(attachments) if attachments else "",
+        wall_edit_url = os.getenv(
+            "VK_WALL_EDIT_URL",
+            "https://eppyjmtowtkxcwwhvwzp.supabase.co/functions/v1/geotrips-vk-wall-edit",
+        ).strip()
+        payload = json.dumps({
+            "post_id": edit_post_id,
+            "message": text,
+            "attachments": ",".join(attachments) if attachments else "",
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            wall_edit_url,
+            data=payload,
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {gateway_key}",
+                "User-Agent": "geotrips-vk-autopost/4.2",
+            },
+            method="POST",
         )
+        try:
+            with urllib.request.urlopen(req, timeout=60) as response:
+                edit_body = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", "replace")
+            fail(f"VK wall edit gateway HTTP {exc.code}: {detail[:500]}")
+        if not edit_body.get("ok"):
+            fail(f"VK wall edit gateway failed: {edit_body}")
+        result = edit_body.get("result")
         vk_post_id = edit_post_id
     else:
         result = vk_call(
