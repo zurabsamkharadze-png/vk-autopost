@@ -698,7 +698,7 @@
   },
   {
     "id": "turkey-russian-tourists-guide-2026-10-01-photo-corrected",
-    "status": "queued",
+    "status": "published",
     "publish_after": null,
     "source": "editorial",
     "source_url": "https://commons.wikimedia.org/wiki/File:Bosphorus_Bridge.jpg",
@@ -706,6 +706,8 @@
     "photo_mode": "reuse_existing_native_vk_photo",
     "attachments": [
       "photo200004513212_457239085_161ba653ccb6ccdf97"
-    ]
+    ],
+    "published_at": "2026-10-01T05:45:24.892549+00:00",
+    "vk_post_id": 51
   }
 ]
