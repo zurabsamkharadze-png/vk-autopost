@@ -240,6 +240,9 @@ def main():
                         time.sleep(delay)
             if attachment:
                 attachments.append(attachment)
+                if tripster_post and len(attachments) >= min_native_photos:
+                    print(f"Collected {len(attachments)} native VK photos; enough for publication.")
+                    break
             else:
                 upload_errors.append(
                     f"image {index}/{len(image_urls)}: {last_error}"
